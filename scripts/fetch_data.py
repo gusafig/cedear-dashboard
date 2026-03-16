@@ -344,7 +344,7 @@ CEDEARS = {
 }
 
 # Eliminar duplicados que pueden existir por México/Brasil
-CEDEARS = dict(sorted(set(CEDEARS.items())))
+CEDEARS = dict(sorted(CEDEARS.items())))
 TICKERS = list(CEDEARS.keys())
 
 
