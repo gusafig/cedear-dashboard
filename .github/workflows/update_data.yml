@@ -23,9 +23,11 @@ jobs:
       - name: Instalar dependencias
         run: pip install yfinance pandas
 
+      - name: Verificar archivos
+        run: ls -la && ls -la scripts/
+
       - name: Descargar datos de Yahoo Finance
         run: python scripts/fetch_data.py
-
       - name: Commit y push del JSON
         run: |
           git config user.name "github-actions[bot]"
