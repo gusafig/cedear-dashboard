@@ -159,12 +159,14 @@
   <div class="controls">
     <input id="search" type="text" placeholder="Buscar ticker o empresa…" oninput="applyFilters()" />
     <select id="sort-sel" onchange="applyFilters()">
-      <option value="sym">Ordenar: A–Z</option>
-      <option value="pct_desc">Mayor variación +</option>
-      <option value="pct_asc">Mayor variación −</option>
-      <option value="price_desc">Precio ↓</option>
-      <option value="price_asc">Precio ↑</option>
-    </select>
+  <option value="sym">Ordenar: A–Z</option>
+  <option value="pct_desc">Mayor variación +</option>
+  <option value="pct_asc">Mayor variación −</option>
+  <option value="price_desc">Precio ↓</option>
+  <option value="price_asc">Precio ↑</option>
+  <option value="rsi_desc">RSI mayor (sobrecompra)</option>
+  <option value="rsi_asc">RSI menor (sobreventa)</option>
+</select>
   </div>
 
   <!-- Sector tabs -->
