@@ -1,0 +1,35 @@
+name: Actualizar datos de mercado
+
+on:
+  schedule:
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install yfinance pandas
+
+      - name: Descargar datos de Yahoo Finance
+        run: python scripts/fetch_data.py
+
+      - name: Commit y push del JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/market_data.json
+          git diff --cached --quiet || git commit -m "chore: actualizar datos [skip ci]"
+          git push
