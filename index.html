@@ -271,12 +271,14 @@ function applyFilters() {
     return secOk && srchOk;
   });
 
-  items.sort((a, b) => {
+items.sort((a, b) => {
     if (sortBy === 'sym')       return a.symbol.localeCompare(b.symbol);
     if (sortBy === 'pct_desc')  return b.change_pct - a.change_pct;
     if (sortBy === 'pct_asc')   return a.change_pct - b.change_pct;
     if (sortBy === 'price_desc')return b.price_usd  - a.price_usd;
     if (sortBy === 'price_asc') return a.price_usd  - b.price_usd;
+    if (sortBy === 'rsi_desc')  return (b.rsi ?? -1) - (a.rsi ?? -1);
+    if (sortBy === 'rsi_asc')   return (a.rsi ?? 999) - (b.rsi ?? 999);
     return 0;
   });
 
