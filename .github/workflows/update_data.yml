@@ -28,12 +28,10 @@ jobs:
       - name: Descargar datos de Yahoo Finance
         run: python scripts/fetch_data.py
 
-      - name: Commit y push del JSON
+       - name: Commit y push del JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git reset --hard origin/main
           git add data/market_data.json
           git diff --cached --quiet || git commit -m "chore: actualizar datos [skip ci]"
           git push
