@@ -27,7 +27,6 @@ jobs:
         run: python scripts/fetch_data.py
 
       - name: Commit y push del JSON
-        - name: Commit y push del JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
