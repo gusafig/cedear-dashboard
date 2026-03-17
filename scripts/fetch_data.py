@@ -2,11 +2,11 @@
 fetch_data.py
 Descarga precios de Yahoo Finance para acciones con CEDEAR en BYMA.
 Genera data/market_data.json que consume el dashboard.
-Soporta datos diarios y semanales.
 """
 
 import json
 import os
+import time
 from datetime import datetime, timedelta
 import yfinance as yf
 
@@ -129,23 +129,37 @@ def compute_sma(closes, period):
     return round(sum(closes[-period:]) / period, 2)
 
 
-def fetch_all(interval="1d"):
+def fetch_all(retries=3, wait=45):
     end_date   = datetime.today()
-    days       = 365 * 3
-    start_date = end_date - timedelta(days=days)
+    start_date = end_date - timedelta(days=365 * 3)
 
-    print(f"[{datetime.now().isoformat()}] Descargando {len(TICKERS)} tickers (interval={interval})...")
+    print(f"[{datetime.now().isoformat()}] Descargando {len(TICKERS)} tickers (3 años, diario)...")
 
-    raw = yf.download(
-        TICKERS,
-        start=start_date.strftime("%Y-%m-%d"),
-        end=end_date.strftime("%Y-%m-%d"),
-        interval=interval,
-        auto_adjust=True,
-        progress=False,
-        group_by="ticker",
-        threads=True,
-    )
+    raw = None
+    for attempt in range(retries):
+        try:
+            raw = yf.download(
+                TICKERS,
+                start=start_date.strftime("%Y-%m-%d"),
+                end=end_date.strftime("%Y-%m-%d"),
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+                group_by="ticker",
+                threads=False,
+            )
+            if raw is not None and not raw.empty:
+                break
+            print(f"  [RETRY {attempt+1}/{retries}] Datos vacíos, esperando {wait}s...")
+            time.sleep(wait)
+        except Exception as e:
+            print(f"  [RETRY {attempt+1}/{retries}] Error: {e}")
+            if attempt < retries - 1:
+                time.sleep(wait)
+
+    if raw is None or raw.empty:
+        print("  [ERROR] No se pudieron descargar datos.")
+        return {}
 
     results = {}
 
@@ -160,7 +174,7 @@ def fetch_all(interval="1d"):
                 print(f"  [SKIP] {sym}: sin datos")
                 continue
 
-            df     = df.dropna(subset=["Close"])
+            df      = df.dropna(subset=["Close"])
             closes  = df["Close"].tolist()
             volumes = df["Volume"].tolist()
 
@@ -171,17 +185,17 @@ def fetch_all(interval="1d"):
             prev_close = round(float(closes[-2]), 2)
             change_pct = round((price - prev_close) / prev_close * 100, 2)
 
-            high_52   = round(float(max(closes)), 2)
-            low_52    = round(float(min(closes)), 2)
+            high_52   = round(float(max(closes[-252:])), 2)
+            low_52    = round(float(min(closes[-252:])), 2)
             vol_today = int(volumes[-1]) if volumes else 0
 
             hist_prices = [round(float(c), 2) for c in closes[-90:]]
             hist_dates  = [d.strftime("%Y-%m-%d") for d in df.index[-90:]]
 
-            rsi                          = compute_rsi(closes)
-            ma20                         = compute_sma(closes, 20)
-            ma50                         = compute_sma(closes, 50)
-            ma200                        = compute_sma(closes, 200)
+            rsi                               = compute_rsi(closes)
+            ma20                              = compute_sma(closes, 20)
+            ma50                              = compute_sma(closes, 50)
+            ma200                             = compute_sma(closes, 200)
             macd_line, signal_line, macd_hist = compute_macd(closes)
 
             results[sym] = {
@@ -213,14 +227,12 @@ def fetch_all(interval="1d"):
 
 
 def main():
-    daily  = fetch_all(interval="1d")
-    weekly = fetch_all(interval="1wk")
+    data = fetch_all()
 
     output = {
         "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "updated_at_baires": (datetime.utcnow() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-        "tickers":        daily,
-        "tickers_weekly": weekly,
+        "tickers": data,
     }
 
     os.makedirs("data", exist_ok=True)
@@ -228,7 +240,7 @@ def main():
     with open(out_path, "w") as f:
         json.dump(output, f, separators=(",", ":"))
 
-    print(f"\n✓ {len(daily)} tickers diarios y {len(weekly)} semanales guardados en {out_path}")
+    print(f"\n✓ {len(data)} tickers guardados en {out_path}")
     print(f"  Actualizado: {output['updated_at_baires']} (hora Buenos Aires)")
 
 
