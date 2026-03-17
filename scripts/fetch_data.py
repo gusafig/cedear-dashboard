@@ -1,236 +1,484 @@
-"""
-fetch_data.py
-Descarga precios de Yahoo Finance para acciones con CEDEAR en BYMA.
-Genera data/market_data.json que consume el dashboard.
-Soporta datos diarios y semanales.
-"""
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CEDEAR Dashboard · BYMA & NYSE</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0d0f14;
+    --bg2:      #13161e;
+    --bg3:      #1a1e2a;
+    --border:   rgba(255,255,255,0.07);
+    --border2:  rgba(255,255,255,0.13);
+    --text:     #e8eaf0;
+    --text2:    #8b90a0;
+    --text3:    #555b6e;
+    --green:    #00c896;
+    --green2:   rgba(0,200,150,0.12);
+    --red:      #f25a5a;
+    --red2:     rgba(242,90,90,0.12);
+    --blue:     #4f8ef7;
+    --blue2:    rgba(79,142,247,0.12);
+    --yellow:   #f5a623;
+    --yellow2:  rgba(245,166,35,0.12);
+    --radius:   10px;
+    --radius-lg:14px;
+    --font:     'Inter', system-ui, sans-serif;
+  }
+  html { font-size: 14px; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text);
+         min-height: 100vh; overflow-x: hidden; }
+  a { color: var(--blue); text-decoration: none; }
 
-import json
-import os
-from datetime import datetime, timedelta
-import yfinance as yf
+  .shell { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1.25rem; }
 
-# ── Universo CEDEAR ─────────────────────────────────────────────────────────
-CEDEARS = {
-    # Tecnología
-    "AAPL":  {"name": "Apple",           "sector": "tech"},
-    "MSFT":  {"name": "Microsoft",       "sector": "tech"},
-    "GOOGL": {"name": "Alphabet",        "sector": "tech"},
-    "AMZN":  {"name": "Amazon",          "sector": "tech"},
-    "TSLA":  {"name": "Tesla",           "sector": "tech"},
-    "META":  {"name": "Meta",            "sector": "tech"},
-    "NVDA":  {"name": "NVIDIA",          "sector": "tech"},
-    "NFLX":  {"name": "Netflix",         "sector": "tech"},
-    "ORCL":  {"name": "Oracle",          "sector": "tech"},
-    "CRM":   {"name": "Salesforce",      "sector": "tech"},
-    "INTC":  {"name": "Intel",           "sector": "tech"},
-    "AMD":   {"name": "AMD",             "sector": "tech"},
-    "QCOM":  {"name": "Qualcomm",        "sector": "tech"},
-    "ADBE":  {"name": "Adobe",           "sector": "tech"},
-    "PYPL":  {"name": "PayPal",          "sector": "tech"},
-    "UBER":  {"name": "Uber",            "sector": "tech"},
-    "SPOT":  {"name": "Spotify",         "sector": "tech"},
-    "SHOP":  {"name": "Shopify",         "sector": "tech"},
-    # Finanzas
-    "JPM":   {"name": "JPMorgan",        "sector": "finance"},
-    "GS":    {"name": "Goldman Sachs",   "sector": "finance"},
-    "BAC":   {"name": "Bank of America", "sector": "finance"},
-    "C":     {"name": "Citigroup",       "sector": "finance"},
-    "WFC":   {"name": "Wells Fargo",     "sector": "finance"},
-    "MS":    {"name": "Morgan Stanley",  "sector": "finance"},
-    "BLK":   {"name": "BlackRock",       "sector": "finance"},
-    "AXP":   {"name": "American Express","sector": "finance"},
-    "V":     {"name": "Visa",            "sector": "finance"},
-    "MA":    {"name": "Mastercard",      "sector": "finance"},
-    # Energía
-    "XOM":   {"name": "ExxonMobil",      "sector": "energy"},
-    "CVX":   {"name": "Chevron",         "sector": "energy"},
-    "COP":   {"name": "ConocoPhillips",  "sector": "energy"},
-    "SLB":   {"name": "Schlumberger",    "sector": "energy"},
-    "BP":    {"name": "BP",              "sector": "energy"},
-    # Consumo
-    "WMT":   {"name": "Walmart",         "sector": "consumer"},
-    "KO":    {"name": "Coca-Cola",       "sector": "consumer"},
-    "PG":    {"name": "Procter & Gamble","sector": "consumer"},
-    "MCD":   {"name": "McDonald's",      "sector": "consumer"},
-    "NKE":   {"name": "Nike",            "sector": "consumer"},
-    "SBUX":  {"name": "Starbucks",       "sector": "consumer"},
-    "DIS":   {"name": "Disney",          "sector": "consumer"},
-    "AMGN":  {"name": "Amgen",           "sector": "consumer"},
-    # Salud
-    "JNJ":   {"name": "Johnson & Johnson","sector": "health"},
-    "PFE":   {"name": "Pfizer",          "sector": "health"},
-    "MRK":   {"name": "Merck",           "sector": "health"},
-    "ABBV":  {"name": "AbbVie",          "sector": "health"},
-    "UNH":   {"name": "UnitedHealth",    "sector": "health"},
-    "LLY":   {"name": "Eli Lilly",       "sector": "health"},
-    # Materiales / Industrial
-    "CAT":   {"name": "Caterpillar",     "sector": "industrial"},
-    "BA":    {"name": "Boeing",          "sector": "industrial"},
-    "GE":    {"name": "GE Aerospace",    "sector": "industrial"},
-    "MMM":   {"name": "3M",              "sector": "industrial"},
-    "HON":   {"name": "Honeywell",       "sector": "industrial"},
+  /* Header */
+  .hdr { display: flex; align-items: flex-start; justify-content: space-between;
+          flex-wrap: wrap; gap: .75rem; margin-bottom: 1.5rem; }
+  .hdr-title h1 { font-size: 1.35rem; font-weight: 600; letter-spacing: -.02em; color: var(--text); }
+  .hdr-title p  { font-size: .8rem; color: var(--text2); margin-top: 3px; }
+  .hdr-meta     { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .pill { font-size: .72rem; font-weight: 500; padding: 3px 9px; border-radius: 99px;
+          border: 1px solid; display: inline-flex; align-items: center; gap: 4px; }
+  .pill-green  { color: var(--green);  background: var(--green2);  border-color: rgba(0,200,150,.25); }
+  .pill-blue   { color: var(--blue);   background: var(--blue2);   border-color: rgba(79,142,247,.25); }
+  .pill-yellow { color: var(--yellow); background: var(--yellow2); border-color: rgba(245,166,35,.25); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Controls */
+  .controls { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
+  .controls input, .controls select {
+    background: var(--bg2); border: 1px solid var(--border2); color: var(--text);
+    border-radius: var(--radius); padding: 6px 11px; font-size: .82rem;
+    outline: none; transition: border-color .15s;
+  }
+  .controls input { min-width: 200px; }
+  .controls input:focus, .controls select:focus { border-color: var(--blue); }
+  .controls select option { background: var(--bg2); }
+
+  /* Interval toggle */
+  .interval-toggle { display: flex; gap: 0; background: var(--bg2);
+                      border: 1px solid var(--border2); border-radius: var(--radius); overflow: hidden; }
+  .interval-btn { padding: 6px 14px; font-size: .82rem; cursor: pointer; background: transparent;
+                   border: none; color: var(--text2); transition: all .15s; }
+  .interval-btn:hover { color: var(--text); }
+  .interval-btn.active { background: var(--blue2); color: var(--blue); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .tab-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text2);
+              padding: 5px 13px; border-radius: 99px; font-size: .78rem; cursor: pointer;
+              transition: all .15s; }
+  .tab-btn:hover  { border-color: var(--border2); color: var(--text); }
+  .tab-btn.active { background: var(--blue2); border-color: rgba(79,142,247,.4); color: var(--blue); }
+
+  /* Ticker grid */
+  .ticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+                  gap: 8px; margin-bottom: 1.75rem; }
+  .tc { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+         padding: 11px 13px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .tc:hover { border-color: var(--border2); background: var(--bg3); }
+  .tc.sel   { border-color: var(--blue); background: var(--bg3); }
+  .tc-sym  { font-size: .95rem; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+  .tc-name { font-size: .72rem; color: var(--text3); margin: 1px 0 6px;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tc-usd  { font-size: .82rem; font-weight: 500; color: var(--text); }
+  .tc-pct  { font-size: .78rem; font-weight: 500; margin-top: 2px; }
+  .up { color: var(--green); } .dn { color: var(--red); }
+
+  /* Detail panel */
+  .detail { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+             padding: 1.25rem; margin-bottom: 1.75rem; }
+  .d-head { display: flex; justify-content: space-between; align-items: flex-start;
+             flex-wrap: wrap; gap: .75rem; margin-bottom: 1.25rem; }
+  .d-sym  { font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; }
+  .d-name { font-size: .82rem; color: var(--text2); margin-top: 2px; }
+  .d-price-usd { font-size: 1.6rem; font-weight: 600; text-align: right; }
+  .d-price-ars { font-size: .8rem; color: var(--text2); text-align: right; margin-top: 2px; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+                gap: 8px; margin-bottom: 1.25rem; }
+  .stat { background: var(--bg3); border-radius: var(--radius); padding: 9px 11px; }
+  .stat-lbl { font-size: .7rem; color: var(--text3); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .04em; }
+  .stat-val { font-size: .95rem; font-weight: 500; color: var(--text); }
+
+  .chart-wrap { position: relative; width: 100%; height: 220px; margin-bottom: 1.25rem; }
+
+  .ind-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+  .ind      { background: var(--bg3); border-radius: var(--radius); padding: 12px 14px; }
+  .ind-lbl  { font-size: .7rem; color: var(--text3); text-transform: uppercase;
+               letter-spacing: .04em; margin-bottom: 6px; }
+  .ind-big  { font-size: 1.3rem; font-weight: 600; margin-bottom: 4px; }
+  .ind-bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 6px; overflow: hidden; }
+  .ind-bar-fill { height: 3px; border-radius: 2px; }
+  .ind-row  { display: flex; justify-content: space-between; font-size: .78rem;
+               color: var(--text2); margin-bottom: 3px; }
+  .ind-row span:last-child { font-weight: 500; color: var(--text); }
+  .sig { font-size: .72rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+  .sig-buy     { color: var(--green);  background: var(--green2); }
+  .sig-sell    { color: var(--red);    background: var(--red2); }
+  .sig-neutral { color: var(--yellow); background: var(--yellow2); }
+
+  /* Interval badge in detail */
+  .interval-badge { font-size: .7rem; font-weight: 600; padding: 2px 8px; border-radius: 99px;
+                     color: var(--blue); background: var(--blue2);
+                     border: 1px solid rgba(79,142,247,.25); margin-left: 8px; vertical-align: middle; }
+
+  .footer { text-align: center; font-size: .75rem; color: var(--text3); padding: 1.5rem 0 .5rem; }
+
+  .loader { text-align: center; padding: 4rem 0; color: var(--text2); }
+  .loader .spin { display: inline-block; width: 28px; height: 28px; border: 2px solid var(--border2);
+                   border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: .75rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err-box { background: var(--red2); border: 1px solid rgba(242,90,90,.25); border-radius: var(--radius);
+              padding: 1rem 1.25rem; color: var(--red); font-size: .85rem; margin-bottom: 1rem; }
+
+  @media (max-width: 600px) {
+    .ticker-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .detail { padding: .9rem; }
+    .d-price-usd { font-size: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="hdr">
+    <div class="hdr-title">
+      <h1>CEDEAR Dashboard</h1>
+      <p>Acciones USA con CEDEAR en BYMA · Datos: Yahoo Finance</p>
+    </div>
+    <div class="hdr-meta" id="hdr-meta">
+      <span class="pill pill-yellow"><span class="dot"></span> Cargando…</span>
+    </div>
+  </header>
+
+  <div class="err-box" id="err-box" style="display:none"></div>
+
+  <div class="controls">
+    <input id="search" type="text" placeholder="Buscar ticker o empresa…" oninput="applyFilters()" />
+    <select id="sort-sel" onchange="applyFilters()">
+      <option value="sym">Ordenar: A–Z</option>
+      <option value="pct_desc">Mayor variación +</option>
+      <option value="pct_asc">Mayor variación −</option>
+      <option value="price_desc">Precio ↓</option>
+      <option value="price_asc">Precio ↑</option>
+      <option value="rsi_desc">RSI mayor (sobrecompra)</option>
+      <option value="rsi_asc">RSI menor (sobreventa)</option>
+    </select>
+    <div class="interval-toggle">
+      <button class="interval-btn active" id="btn-daily"  onclick="switchInterval('daily')">Diario</button>
+      <button class="interval-btn"        id="btn-weekly" onclick="switchInterval('weekly')">Semanal</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="loader" id="loader">
+    <div class="spin"></div>
+    <p>Cargando datos de mercado…</p>
+  </div>
+
+  <div class="ticker-grid" id="ticker-grid" style="display:none"></div>
+  <div class="detail"      id="detail-panel" style="display:none"></div>
+
+  <footer class="footer">
+    Datos provistos por <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> vía yfinance ·
+    Actualización automática de lunes a viernes · Los precios ARS son referenciales (TC implícito CEDEAR)
+  </footer>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let MARKET_DAILY  = {};
+let MARKET_WEEKLY = {};
+let MARKET        = {};
+let selectedSym     = null;
+let currentSector   = '';
+let currentInterval = 'daily';
+let priceChart      = null;
+
+const DATA_URL = 'data/market_data.json';
+
+const SECTOR_LABELS = {
+  '': 'Todos', tech: 'Tecnología', finance: 'Finanzas',
+  energy: 'Energía', consumer: 'Consumo', health: 'Salud', industrial: 'Industrial'
+};
+
+let TC_REF = 1050;
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    const res = await fetch(DATA_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    MARKET_DAILY  = json.tickers         || {};
+    MARKET_WEEKLY = json.tickers_weekly  || {};
+    MARKET        = MARKET_DAILY;
+
+    const updatedAt = json.updated_at_baires || '';
+
+    document.getElementById('hdr-meta').innerHTML = `
+      <span class="pill pill-green"><span class="dot"></span> NYSE/NASDAQ</span>
+      <span class="pill pill-blue"><span class="dot"></span> BYMA</span>
+      <span class="pill pill-yellow">Actualizado: ${updatedAt} hs</span>
+    `;
+
+    const sectors = [...new Set(Object.values(MARKET).map(d => d.sector))];
+    buildTabs(sectors);
+    applyFilters();
+
+    document.getElementById('loader').style.display      = 'none';
+    document.getElementById('ticker-grid').style.display = 'grid';
+
+    const first = Object.keys(MARKET)[0];
+    if (first) selectTicker(first);
+
+  } catch (e) {
+    document.getElementById('loader').style.display = 'none';
+    const box = document.getElementById('err-box');
+    box.style.display = 'block';
+    box.textContent = `No se pudieron cargar los datos (${e.message}). ` +
+      'Si estás ejecutando el archivo localmente (file://), abrilo desde un servidor web. ' +
+      'En GitHub Pages funciona automáticamente.';
+  }
 }
 
-CEDEARS = dict(sorted(CEDEARS.items()))
-TICKERS = list(CEDEARS.keys())
+// ── Interval switch ───────────────────────────────────────────────────────────
+function switchInterval(interval) {
+  currentInterval = interval;
+  MARKET = interval === 'weekly' ? MARKET_WEEKLY : MARKET_DAILY;
 
+  document.getElementById('btn-daily').classList.toggle('active',  interval === 'daily');
+  document.getElementById('btn-weekly').classList.toggle('active', interval === 'weekly');
 
-def compute_rsi(closes, period=14):
-    if len(closes) < period + 1:
-        return None
-    deltas = [closes[i] - closes[i-1] for i in range(1, len(closes))]
-    gains  = [d if d > 0 else 0 for d in deltas[-period:]]
-    losses = [-d if d < 0 else 0 for d in deltas[-period:]]
-    avg_gain = sum(gains) / period
-    avg_loss = sum(losses) / period
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 2)
+  selectedSym = null;
+  document.getElementById('detail-panel').style.display = 'none';
 
+  const sectors = [...new Set(Object.values(MARKET).map(d => d.sector))];
+  buildTabs(sectors);
+  applyFilters();
+}
 
-def compute_ema(closes, period):
-    if len(closes) < period:
-        return None
-    k   = 2 / (period + 1)
-    ema = sum(closes[:period]) / period
-    for price in closes[period:]:
-        ema = price * k + ema * (1 - k)
-    return round(ema, 2)
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function buildTabs(sectors) {
+  const allSectors = ['', ...Object.keys(SECTOR_LABELS).filter(k => k && sectors.includes(k))];
+  const wrap = document.getElementById('tabs');
+  wrap.innerHTML = '';
+  allSectors.forEach(key => {
+    if (!(key in SECTOR_LABELS)) return;
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (key === currentSector ? ' active' : '');
+    btn.textContent = SECTOR_LABELS[key];
+    btn.onclick = () => { currentSector = key; buildTabs(sectors); applyFilters(); };
+    wrap.appendChild(btn);
+  });
+}
 
+// ── Filters & grid ────────────────────────────────────────────────────────────
+function applyFilters() {
+  const q      = document.getElementById('search').value.toLowerCase();
+  const sortBy = document.getElementById('sort-sel').value;
 
-def compute_macd(closes):
-    ema12 = compute_ema(closes, 12)
-    ema26 = compute_ema(closes, 26)
-    if ema12 is None or ema26 is None:
-        return None, None, None
-    macd_line = round(ema12 - ema26, 4)
-    if len(closes) >= 35:
-        macd_series = []
-        k12 = 2 / 13
-        k26 = 2 / 27
-        e12 = sum(closes[:12]) / 12
-        e26 = sum(closes[:26]) / 26
-        for p in closes[26:]:
-            e12 = p * k12 + e12 * (1 - k12)
-            e26 = p * k26 + e26 * (1 - k26)
-            macd_series.append(e12 - e26)
-        signal = compute_ema(macd_series, 9)
-    else:
-        signal = None
-    hist = round(macd_line - signal, 4) if signal else None
-    return macd_line, signal, hist
+  let items = Object.values(MARKET).filter(d => {
+    const secOk  = !currentSector || d.sector === currentSector;
+    const srchOk = !q || d.symbol.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
+    return secOk && srchOk;
+  });
 
+  items.sort((a, b) => {
+    if (sortBy === 'sym')        return a.symbol.localeCompare(b.symbol);
+    if (sortBy === 'pct_desc')   return b.change_pct - a.change_pct;
+    if (sortBy === 'pct_asc')    return a.change_pct - b.change_pct;
+    if (sortBy === 'price_desc') return b.price_usd  - a.price_usd;
+    if (sortBy === 'price_asc')  return a.price_usd  - b.price_usd;
+    if (sortBy === 'rsi_desc')   return (b.rsi ?? -1)  - (a.rsi ?? -1);
+    if (sortBy === 'rsi_asc')    return (a.rsi ?? 999) - (b.rsi ?? 999);
+    return 0;
+  });
 
-def compute_sma(closes, period):
-    if len(closes) < period:
-        return None
-    return round(sum(closes[-period:]) / period, 2)
+  renderGrid(items);
+}
 
+function renderGrid(items) {
+  const grid = document.getElementById('ticker-grid');
+  grid.innerHTML = '';
+  items.forEach(d => {
+    const el = document.createElement('div');
+    const up = d.change_pct >= 0;
+    el.className = 'tc' + (d.symbol === selectedSym ? ' sel' : '');
+    el.innerHTML = `
+      <div class="tc-sym">${d.symbol}</div>
+      <div class="tc-name">${d.name}</div>
+      <div class="tc-usd">USD ${fmt2(d.price_usd)}</div>
+      <div class="tc-pct ${up ? 'up' : 'dn'}">${up ? '+' : ''}${fmt2(d.change_pct)}%</div>
+    `;
+    el.onclick = () => selectTicker(d.symbol);
+    grid.appendChild(el);
+  });
+}
 
-def fetch_all(interval="1d"):
-    end_date   = datetime.today()
-    days       = 365 if interval == "1d" else 365 * 3
-    start_date = end_date - timedelta(days=days)
+// ── Detail ────────────────────────────────────────────────────────────────────
+function selectTicker(sym) {
+  selectedSym = sym;
+  applyFilters();
+  renderDetail(sym);
+  document.getElementById('detail-panel').style.display = 'block';
+  document.getElementById('detail-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
-    print(f"[{datetime.now().isoformat()}] Descargando {len(TICKERS)} tickers (interval={interval})...")
+function renderDetail(sym) {
+  const d = MARKET[sym];
+  if (!d) return;
 
-    raw = yf.download(
-        TICKERS,
-        start=start_date.strftime("%Y-%m-%d"),
-        end=end_date.strftime("%Y-%m-%d"),
-        interval=interval,
-        auto_adjust=True,
-        progress=False,
-        group_by="ticker",
-        threads=True,
-    )
+  const up       = d.change_pct >= 0;
+  const pctColor = up ? 'var(--green)' : 'var(--red)';
+  const pctSign  = up ? '+' : '';
 
-    results = {}
+  const ars    = (d.price_usd * TC_REF).toFixed(0);
+  const arsStr = Number(ars).toLocaleString('es-AR');
 
-    for sym in TICKERS:
-        try:
-            if len(TICKERS) == 1:
-                df = raw
-            else:
-                df = raw[sym] if sym in raw.columns.get_level_values(0) else None
+  const fmtVol = d.volume >= 1e6 ? (d.volume / 1e6).toFixed(1) + 'M' : (d.volume / 1e3).toFixed(0) + 'K';
+  const sector = SECTOR_LABELS[d.sector] || d.sector;
 
-            if df is None or df.empty:
-                print(f"  [SKIP] {sym}: sin datos")
-                continue
+  const intervalLabel = currentInterval === 'weekly' ? 'Semanal' : 'Diario';
+  const chartLabel    = currentInterval === 'weekly' ? 'últimas 90 semanas (~1.7 años)' : 'últimos 90 días';
+  const prevLabel     = currentInterval === 'weekly' ? 'Cierre sem. ant.' : 'Cierre ant.';
 
-            df     = df.dropna(subset=["Close"])
-            closes  = df["Close"].tolist()
-            volumes = df["Volume"].tolist()
+  const [rsiCls, rsiLbl] = d.rsi >= 70 ? ['sig-sell','Sobrecompra'] :
+                            d.rsi <= 30 ? ['sig-buy', 'Sobreventa']  : ['sig-neutral','Neutral'];
+  const rsiFill  = d.rsi !== null ? `${d.rsi}%` : '0%';
+  const rsiColor = d.rsi >= 70 ? 'var(--red)' : d.rsi <= 30 ? 'var(--green)' : 'var(--blue)';
 
-            if len(closes) < 2:
-                continue
+  const macdUp = d.macd !== null && d.macd_signal !== null && d.macd > d.macd_signal;
+  const [macdCls, macdLbl] = macdUp ? ['sig-buy','Alcista'] : ['sig-sell','Bajista'];
 
-            price      = round(float(closes[-1]), 2)
-            prev_close = round(float(closes[-2]), 2)
-            change_pct = round((price - prev_close) / prev_close * 100, 2)
+  const aboveCount = [d.ma20, d.ma50, d.ma200].filter(m => m && d.price_usd > m).length;
+  const [maCls, maLbl] = aboveCount === 3 ? ['sig-buy','Por encima de las 3 MAs'] :
+                          aboveCount === 0 ? ['sig-sell','Por debajo de las 3 MAs'] :
+                                             ['sig-neutral','Mixta'];
 
-            high_52   = round(float(max(closes)), 2)
-            low_52    = round(float(min(closes)), 2)
-            vol_today = int(volumes[-1]) if volumes else 0
+  const maLabel = currentInterval === 'weekly'
+    ? { m20: 'MA 20 sem', m50: 'MA 50 sem', m200: 'MA 200 sem' }
+    : { m20: 'MA 20',     m50: 'MA 50',     m200: 'MA 200' };
 
-            hist_prices = [round(float(c), 2) for c in closes[-90:]]
-            hist_dates  = [d.strftime("%Y-%m-%d") for d in df.index[-90:]]
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `
+    <div class="d-head">
+      <div>
+        <div class="d-sym">${sym}
+          <span style="font-size:1rem;font-weight:400;color:var(--text2)">${d.name}</span>
+          <span class="interval-badge">${intervalLabel}</span>
+        </div>
+        <div class="d-name">Sector: ${sector} &nbsp;·&nbsp; CEDEAR disponible en BYMA</div>
+      </div>
+      <div>
+        <div class="d-price-usd">USD ${fmt2(d.price_usd)} <span style="font-size:1rem;color:${pctColor}">${pctSign}${fmt2(d.change_pct)}%</span></div>
+        <div class="d-price-ars">≈ ARS ${arsStr} &nbsp;·&nbsp; TC ref. ${TC_REF.toLocaleString('es-AR')}</div>
+      </div>
+    </div>
 
-            rsi                          = compute_rsi(closes)
-            ma20                         = compute_sma(closes, 20)
-            ma50                         = compute_sma(closes, 50)
-            ma200                        = compute_sma(closes, 200)
-            macd_line, signal_line, macd_hist = compute_macd(closes)
+    <div class="stats-row">
+      <div class="stat"><div class="stat-lbl">${prevLabel}</div><div class="stat-val">USD ${fmt2(d.prev_close)}</div></div>
+      <div class="stat"><div class="stat-lbl">Máx. 52 sem.</div><div class="stat-val">USD ${fmt2(d.high_52w)}</div></div>
+      <div class="stat"><div class="stat-lbl">Mín. 52 sem.</div><div class="stat-val">USD ${fmt2(d.low_52w)}</div></div>
+      <div class="stat"><div class="stat-lbl">Volumen</div><div class="stat-val">${fmtVol}</div></div>
+      <div class="stat"><div class="stat-lbl">ARS ref.</div><div class="stat-val">${arsStr}</div></div>
+    </div>
 
-            results[sym] = {
-                "symbol":      sym,
-                "name":        CEDEARS[sym]["name"],
-                "sector":      CEDEARS[sym]["sector"],
-                "price_usd":   price,
-                "prev_close":  prev_close,
-                "change_pct":  change_pct,
-                "high_52w":    high_52,
-                "low_52w":     low_52,
-                "volume":      vol_today,
-                "rsi":         rsi,
-                "ma20":        ma20,
-                "ma50":        ma50,
-                "ma200":       ma200,
-                "macd":        macd_line,
-                "macd_signal": signal_line,
-                "macd_hist":   macd_hist,
-                "hist_prices": hist_prices,
-                "hist_dates":  hist_dates,
-            }
-            print(f"  [OK] {sym}: USD {price:>8.2f}  ({change_pct:+.2f}%)")
+    <div style="font-size:.75rem;color:var(--text3);margin-bottom:.5rem;">Precio histórico · ${chartLabel}</div>
+    <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
 
-        except Exception as e:
-            print(f"  [ERR] {sym}: {e}")
+    <div style="font-size:.75rem;color:var(--text3);margin-bottom:.6rem;">Indicadores técnicos</div>
+    <div class="ind-grid">
 
-    return results
+      <div class="ind">
+        <div class="ind-lbl">RSI (14)</div>
+        <div class="ind-big" style="color:${rsiColor}">${d.rsi !== null ? d.rsi : '—'}</div>
+        <div class="ind-bar-wrap"><div class="ind-bar-fill" style="width:${rsiFill};background:${rsiColor}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text3);margin-bottom:6px;">
+          <span>0</span><span>30</span><span>70</span><span>100</span>
+        </div>
+        <span class="sig ${rsiCls}">${rsiLbl}</span>
+      </div>
 
+      <div class="ind">
+        <div class="ind-lbl">MACD (12/26/9)</div>
+        <div class="ind-row"><span>Línea MACD</span><span>${d.macd !== null ? fmt4(d.macd) : '—'}</span></div>
+        <div class="ind-row"><span>Señal</span><span>${d.macd_signal !== null ? fmt4(d.macd_signal) : '—'}</span></div>
+        <div class="ind-row"><span>Histograma</span>
+          <span style="color:${macdUp ? 'var(--green)':'var(--red)'}">${d.macd_hist !== null ? fmt4(d.macd_hist) : '—'}</span>
+        </div>
+        <div style="margin-top:8px"><span class="sig ${macdCls}">${macdLbl}</span></div>
+      </div>
 
-def main():
-    daily  = fetch_all(interval="1d")
-    weekly = fetch_all(interval="1wk")
+      <div class="ind">
+        <div class="ind-lbl">Medias móviles simples</div>
+        <div class="ind-row"><span>${maLabel.m20}</span>
+          <span style="color:${d.price_usd > d.ma20 ? 'var(--green)':'var(--red)'}">${d.ma20 !== null ? '$'+fmt2(d.ma20) : '—'}</span></div>
+        <div class="ind-row"><span>${maLabel.m50}</span>
+          <span style="color:${d.price_usd > d.ma50 ? 'var(--green)':'var(--red)'}">${d.ma50 !== null ? '$'+fmt2(d.ma50) : '—'}</span></div>
+        <div class="ind-row"><span>${maLabel.m200}</span>
+          <span style="color:${d.price_usd > d.ma200 ? 'var(--green)':'var(--red)'}">${d.ma200 !== null ? '$'+fmt2(d.ma200) : '—'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${maCls}">${maLbl}</span></div>
+      </div>
 
-    output = {
-        "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "updated_at_baires": (datetime.utcnow() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-        "tickers":        daily,
-        "tickers_weekly": weekly,
+    </div>
+  `;
+
+  const ctx = document.getElementById('price-chart').getContext('2d');
+  if (priceChart) priceChart.destroy();
+
+  const prices = d.hist_prices || [];
+  const dates  = d.hist_dates  || [];
+  const isUp2  = prices.length > 1 && prices[prices.length-1] >= prices[0];
+  const lc     = isUp2 ? '#00c896' : '#f25a5a';
+
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        data: prices,
+        borderColor: lc,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+        backgroundColor: (ctx2) => {
+          const g = ctx2.chart.ctx.createLinearGradient(0, 0, 0, 200);
+          g.addColorStop(0, isUp2 ? 'rgba(0,200,150,.18)' : 'rgba(242,90,90,.18)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          return g;
+        }
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ' USD ' + c.parsed.y.toFixed(2) } }
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 7, font: { size: 11 }, color: '#555b6e' }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, color: '#555b6e', callback: v => '$'+v.toFixed(0) },
+             grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
     }
+  });
+}
 
-    os.makedirs("data", exist_ok=True)
-    out_path = "data/market_data.json"
-    with open(out_path, "w") as f:
-        json.dump(output, f, separators=(",", ":"))
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt2 = v => v !== null && v !== undefined ? Number(v).toFixed(2) : '—';
+const fmt4 = v => v !== null && v !== undefined ? Number(v).toFixed(4) : '—';
 
-    print(f"\n✓ {len(daily)} tickers diarios y {len(weekly)} semanales guardados en {out_path}")
-    print(f"  Actualizado: {output['updated_at_baires']} (hora Buenos Aires)")
-
-
-if __name__ == "__main__":
-    main()
+// ── Init ──────────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>
