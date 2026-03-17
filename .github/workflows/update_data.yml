@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Instalar dependencias
-        run: pip install yfinance==0.2.54 "pandas>=2.0"
+        run: pip install yfinance "pandas>=2.0"
       - name: Descargar datos de Yahoo Finance
         run: python scripts/fetch_data.py
       - name: Commit y push del JSON
