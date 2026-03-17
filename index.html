@@ -59,14 +59,6 @@
   .controls input:focus, .controls select:focus { border-color: var(--blue); }
   .controls select option { background: var(--bg2); }
 
-  /* Interval toggle */
-  .interval-toggle { display: flex; gap: 0; background: var(--bg2);
-                      border: 1px solid var(--border2); border-radius: var(--radius); overflow: hidden; }
-  .interval-btn { padding: 6px 14px; font-size: .82rem; cursor: pointer; background: transparent;
-                   border: none; color: var(--text2); transition: all .15s; }
-  .interval-btn:hover { color: var(--text); }
-  .interval-btn.active { background: var(--blue2); color: var(--blue); }
-
   /* Tabs */
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1.25rem; }
   .tab-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text2);
@@ -122,11 +114,6 @@
   .sig-sell    { color: var(--red);    background: var(--red2); }
   .sig-neutral { color: var(--yellow); background: var(--yellow2); }
 
-  /* Interval badge in detail */
-  .interval-badge { font-size: .7rem; font-weight: 600; padding: 2px 8px; border-radius: 99px;
-                     color: var(--blue); background: var(--blue2);
-                     border: 1px solid rgba(79,142,247,.25); margin-left: 8px; vertical-align: middle; }
-
   .footer { text-align: center; font-size: .75rem; color: var(--text3); padding: 1.5rem 0 .5rem; }
 
   .loader { text-align: center; padding: 4rem 0; color: var(--text2); }
@@ -149,7 +136,7 @@
   <header class="hdr">
     <div class="hdr-title">
       <h1>CEDEAR Dashboard</h1>
-      <p>Acciones USA con CEDEAR en BYMA · Datos: Yahoo Finance</p>
+      <p>Acciones USA con CEDEAR en BYMA · Datos: Yahoo Finance · Últimos 3 años diarios</p>
     </div>
     <div class="hdr-meta" id="hdr-meta">
       <span class="pill pill-yellow"><span class="dot"></span> Cargando…</span>
@@ -169,10 +156,6 @@
       <option value="rsi_desc">RSI mayor (sobrecompra)</option>
       <option value="rsi_asc">RSI menor (sobreventa)</option>
     </select>
-    <div class="interval-toggle">
-      <button class="interval-btn active" id="btn-daily"  onclick="switchInterval('daily')">Diario</button>
-      <button class="interval-btn"        id="btn-weekly" onclick="switchInterval('weekly')">Semanal</button>
-    </div>
   </div>
 
   <div class="tabs" id="tabs"></div>
@@ -193,13 +176,10 @@
 
 <script>
 // ── State ────────────────────────────────────────────────────────────────────
-let MARKET_DAILY  = {};
-let MARKET_WEEKLY = {};
-let MARKET        = {};
-let selectedSym     = null;
-let currentSector   = '';
-let currentInterval = 'daily';
-let priceChart      = null;
+let MARKET      = {};
+let selectedSym = null;
+let currentSector = '';
+let priceChart  = null;
 
 const DATA_URL = 'data/market_data.json';
 
@@ -217,10 +197,7 @@ async function boot() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
 
-    MARKET_DAILY  = json.tickers         || {};
-    MARKET_WEEKLY = json.tickers_weekly  || {};
-    MARKET        = MARKET_DAILY;
-
+    MARKET = json.tickers || {};
     const updatedAt = json.updated_at_baires || '';
 
     document.getElementById('hdr-meta').innerHTML = `
@@ -247,22 +224,6 @@ async function boot() {
       'Si estás ejecutando el archivo localmente (file://), abrilo desde un servidor web. ' +
       'En GitHub Pages funciona automáticamente.';
   }
-}
-
-// ── Interval switch ───────────────────────────────────────────────────────────
-function switchInterval(interval) {
-  currentInterval = interval;
-  MARKET = interval === 'weekly' ? MARKET_WEEKLY : MARKET_DAILY;
-
-  document.getElementById('btn-daily').classList.toggle('active',  interval === 'daily');
-  document.getElementById('btn-weekly').classList.toggle('active', interval === 'weekly');
-
-  selectedSym = null;
-  document.getElementById('detail-panel').style.display = 'none';
-
-  const sectors = [...new Set(Object.values(MARKET).map(d => d.sector))];
-  buildTabs(sectors);
-  applyFilters();
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -346,10 +307,6 @@ function renderDetail(sym) {
   const fmtVol = d.volume >= 1e6 ? (d.volume / 1e6).toFixed(1) + 'M' : (d.volume / 1e3).toFixed(0) + 'K';
   const sector = SECTOR_LABELS[d.sector] || d.sector;
 
-  const intervalLabel = currentInterval === 'weekly' ? 'Semanal' : 'Diario';
-  const chartLabel    = currentInterval === 'weekly' ? 'últimas 90 semanas (~1.7 años)' : 'últimos 90 días';
-  const prevLabel     = currentInterval === 'weekly' ? 'Cierre sem. ant.' : 'Cierre ant.';
-
   const [rsiCls, rsiLbl] = d.rsi >= 70 ? ['sig-sell','Sobrecompra'] :
                             d.rsi <= 30 ? ['sig-buy', 'Sobreventa']  : ['sig-neutral','Neutral'];
   const rsiFill  = d.rsi !== null ? `${d.rsi}%` : '0%';
@@ -363,18 +320,11 @@ function renderDetail(sym) {
                           aboveCount === 0 ? ['sig-sell','Por debajo de las 3 MAs'] :
                                              ['sig-neutral','Mixta'];
 
-  const maLabel = currentInterval === 'weekly'
-    ? { m20: 'MA 20 sem', m50: 'MA 50 sem', m200: 'MA 200 sem' }
-    : { m20: 'MA 20',     m50: 'MA 50',     m200: 'MA 200' };
-
   const panel = document.getElementById('detail-panel');
   panel.innerHTML = `
     <div class="d-head">
       <div>
-        <div class="d-sym">${sym}
-          <span style="font-size:1rem;font-weight:400;color:var(--text2)">${d.name}</span>
-          <span class="interval-badge">${intervalLabel}</span>
-        </div>
+        <div class="d-sym">${sym} <span style="font-size:1rem;font-weight:400;color:var(--text2)">${d.name}</span></div>
         <div class="d-name">Sector: ${sector} &nbsp;·&nbsp; CEDEAR disponible en BYMA</div>
       </div>
       <div>
@@ -384,14 +334,14 @@ function renderDetail(sym) {
     </div>
 
     <div class="stats-row">
-      <div class="stat"><div class="stat-lbl">${prevLabel}</div><div class="stat-val">USD ${fmt2(d.prev_close)}</div></div>
+      <div class="stat"><div class="stat-lbl">Cierre ant.</div><div class="stat-val">USD ${fmt2(d.prev_close)}</div></div>
       <div class="stat"><div class="stat-lbl">Máx. 52 sem.</div><div class="stat-val">USD ${fmt2(d.high_52w)}</div></div>
       <div class="stat"><div class="stat-lbl">Mín. 52 sem.</div><div class="stat-val">USD ${fmt2(d.low_52w)}</div></div>
       <div class="stat"><div class="stat-lbl">Volumen</div><div class="stat-val">${fmtVol}</div></div>
       <div class="stat"><div class="stat-lbl">ARS ref.</div><div class="stat-val">${arsStr}</div></div>
     </div>
 
-    <div style="font-size:.75rem;color:var(--text3);margin-bottom:.5rem;">Precio histórico · ${chartLabel}</div>
+    <div style="font-size:.75rem;color:var(--text3);margin-bottom:.5rem;">Precio histórico · últimos 90 días</div>
     <div class="chart-wrap"><canvas id="price-chart"></canvas></div>
 
     <div style="font-size:.75rem;color:var(--text3);margin-bottom:.6rem;">Indicadores técnicos</div>
@@ -419,11 +369,11 @@ function renderDetail(sym) {
 
       <div class="ind">
         <div class="ind-lbl">Medias móviles simples</div>
-        <div class="ind-row"><span>${maLabel.m20}</span>
+        <div class="ind-row"><span>MA 20</span>
           <span style="color:${d.price_usd > d.ma20 ? 'var(--green)':'var(--red)'}">${d.ma20 !== null ? '$'+fmt2(d.ma20) : '—'}</span></div>
-        <div class="ind-row"><span>${maLabel.m50}</span>
+        <div class="ind-row"><span>MA 50</span>
           <span style="color:${d.price_usd > d.ma50 ? 'var(--green)':'var(--red)'}">${d.ma50 !== null ? '$'+fmt2(d.ma50) : '—'}</span></div>
-        <div class="ind-row"><span>${maLabel.m200}</span>
+        <div class="ind-row"><span>MA 200</span>
           <span style="color:${d.price_usd > d.ma200 ? 'var(--green)':'var(--red)'}">${d.ma200 !== null ? '$'+fmt2(d.ma200) : '—'}</span></div>
         <div style="margin-top:8px"><span class="sig ${maCls}">${maLbl}</span></div>
       </div>
