@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout repositorio
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
@@ -23,12 +21,12 @@ jobs:
           python-version: "3.11"
 
       - name: Instalar dependencias
-        run: pip install yfinance pandas
+        run: pip install yfinance==0.2.54 "pandas>=2.0"
 
       - name: Descargar datos de Yahoo Finance
         run: python scripts/fetch_data.py
 
-       - name: Commit y push del JSON
+      - name: Commit y push del JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
