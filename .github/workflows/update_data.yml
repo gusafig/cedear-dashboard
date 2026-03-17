@@ -2,7 +2,6 @@ name: Actualizar datos de mercado
 
 on:
   schedule:
-    # Lunes a viernes 22:30 UTC = 19:30 ARS (después del cierre NYSE 16:00 ET)
     - cron: "30 22 * * 1-5"
   workflow_dispatch:
 
@@ -33,9 +32,11 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git stash
           git fetch origin
           git checkout main
-          git pull origin main --rebase
+          git pull origin main
+          git stash pop
           git add data/market_data.json
           git diff --cached --quiet && echo "Sin cambios" && exit 0
           git commit -m "data: actualizar mercado $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
