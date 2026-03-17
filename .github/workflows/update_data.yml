@@ -27,10 +27,10 @@ jobs:
         run: python scripts/fetch_data.py
 
       - name: Commit y push del JSON
-       run: |
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           git add data/market_data.json
           git diff --cached --quiet || git commit -m "chore: actualizar datos [skip ci]"
-          git pull --rebase origin main
           git push
