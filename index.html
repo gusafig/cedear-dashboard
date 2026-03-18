@@ -436,6 +436,14 @@ function renderDetail(sym) {
                           aboveMA===0 ? ['sig-sell','Por debajo 3 MAs'] : ['sig-neutral','Mixta'];
 
   // Bollinger signal
+  // ADX signal
+  const adxColor = d.adx !== null && d.adx >= 25 ? (d.pdi > d.ndi ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
+  const [adxCls, adxLbl] = d.adx === null     ? ['sig-neutral', 'Sin datos'] :
+                            d.adx < 20         ? ['sig-neutral', 'Sin tendencia'] :
+                            d.adx < 25         ? ['sig-neutral', 'Tendencia débil'] :
+                            d.pdi > d.ndi      ? ['sig-buy',     'Tendencia alcista'] :
+                                                 ['sig-sell',    'Tendencia bajista'];
+
   const bbCls = d.bb_upper && d.price_usd > d.bb_upper ? 'sig-sell' :
                 d.bb_lower && d.price_usd < d.bb_lower ? 'sig-buy'  : 'sig-neutral';
   const bbLbl = d.bb_upper && d.price_usd > d.bb_upper ? 'Sobre banda sup.' :
@@ -521,6 +529,19 @@ function renderDetail(sym) {
         <div class="ind-row"><span>Precio actual</span>
           <span style="color:${pColor}">$${f2(d.price_usd)}</span></div>
         <div style="margin-top:8px"><span class="sig ${bbCls}">${bbLbl}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">ADX / DMI (14)</div>
+        <div class="ind-big" style="color:${adxColor}">${d.adx ?? '—'}</div>
+        <div class="ind-bar-bg"><div class="ind-bar-fill" style="width:${Math.min(d.adx??0,100)}%;background:${adxColor}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text3);margin-bottom:6px">
+          <span>0</span><span>20</span><span>40</span><span>100</span></div>
+        <div class="ind-row"><span>+DI (alcista)</span>
+          <span style="color:var(--green);font-weight:600">${f2(d.pdi)}</span></div>
+        <div class="ind-row"><span>−DI (bajista)</span>
+          <span style="color:var(--red);font-weight:600">${f2(d.ndi)}</span></div>
+        <div style="margin-top:8px"><span class="sig ${adxCls}">${adxLbl}</span></div>
       </div>
 
     </div>
@@ -613,6 +634,9 @@ function scoreOf(d) {
   if (aboveMA === 3) buy++; else if (aboveMA === 0) sell++;
   if (d.bb_lower && d.price_usd < d.bb_lower) buy++;
   if (d.bb_upper && d.price_usd > d.bb_upper) sell++;
+  if (d.adx !== null && d.adx >= 25) {
+    if (d.pdi > d.ndi) buy++; else sell++;
+  }
   return { buy, sell, total: buy - sell };
 }
 
@@ -658,6 +682,8 @@ function renderSignals() {
                        sell: [d.ma20,d.ma50,d.ma200].filter(m=>m&&d.price_usd>m).length===0 },
       { label:'BB',   buy:  !!(d.bb_lower && d.price_usd < d.bb_lower),
                        sell: !!(d.bb_upper && d.price_usd > d.bb_upper) },
+      { label:'ADX',  buy:  !!(d.adx !== null && d.adx >= 25 && d.pdi > d.ndi),
+                       sell: !!(d.adx !== null && d.adx >= 25 && d.ndi > d.pdi) },
     ];
     const dots = indicators.map(i => {
       const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
@@ -682,6 +708,11 @@ function renderSignals() {
       <td class="${cls}">${sign}${f2(d.change_pct)}%</td>
       <td style="color:${rsiColor};font-weight:600">${d.rsi ?? '—'}</td>
       <td>${macdStr}</td>
+      <td>${d.adx !== null ? (() => {
+        const col = d.adx < 20 ? 'var(--text3)' : d.pdi > d.ndi ? 'var(--green)' : 'var(--red)';
+        const lbl = d.adx < 20 ? 'Lateral' : d.pdi > d.ndi ? '▲' : '▼';
+        return '<span style="color:'+col+';font-weight:600">'+f2(d.adx)+'</span> <span style="color:'+col+';font-size:.7rem">'+lbl+'</span>';
+      })() : '—'}</td>
       <td><div class="score-bar">
         <div class="score-dots">${dots}</div>
         <span style="font-weight:700;color:${scoreColor}">${scoreStr}</span>
@@ -693,8 +724,8 @@ function renderSignals() {
     <table class="signals-table">
       <thead><tr>
         <th>Ticker</th><th>Precio</th><th>Var %</th>
-        <th>RSI</th><th>MACD</th>
-        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB)</span></th>
+        <th>RSI</th><th>MACD</th><th>ADX</th>
+        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX)</span></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
