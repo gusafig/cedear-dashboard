@@ -63,15 +63,48 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .ticker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
               gap:7px;margin-bottom:1.5rem}
 .tc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-    padding:10px 12px;cursor:pointer;transition:all .15s;user-select:none}
+    padding:10px 12px;cursor:pointer;transition:all .15s;user-select:none;position:relative}
 .tc:hover{border-color:var(--border2);background:var(--bg3)}
 .tc.sel{border-color:var(--blue);background:var(--bg3)}
+.tc.rsi-green{border-left:3px solid var(--green)}
+.tc.rsi-red{border-left:3px solid var(--red)}
 .tc-sym{font-size:.9rem;font-weight:600;letter-spacing:-.01em}
 .tc-name{font-size:.68rem;color:var(--text3);margin:1px 0 5px;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tc-price{font-size:.8rem;font-weight:500}
 .tc-pct{font-size:.75rem;font-weight:500;margin-top:1px}
 .up{color:var(--green)} .dn{color:var(--red)} .flat{color:var(--text2)}
+.tc-badges{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}
+.badge{font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:99px;letter-spacing:.02em}
+.badge-sell{color:var(--red);background:var(--red2)}
+.badge-buy{color:var(--green);background:var(--green2)}
+.badge-purple{color:var(--purple);background:var(--purple2)}
+
+/* ── View nav ── */
+.view-nav{display:flex;gap:4px;margin-bottom:1rem}
+.vnav{background:var(--bg2);border:1px solid var(--border);color:var(--text2);
+  padding:5px 14px;border-radius:99px;font-size:.78rem;cursor:pointer;transition:all .15s}
+.vnav:hover{border-color:var(--border2);color:var(--text)}
+.vnav.active{background:var(--blue2);border-color:rgba(88,166,255,.4);color:var(--blue);font-weight:500}
+
+/* ── Pantalla señales ── */
+.signals-wrap{margin-bottom:1.5rem}
+.signals-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.signals-table th{text-align:left;padding:7px 10px;color:var(--text3);
+  font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;
+  border-bottom:1px solid var(--border);font-weight:500}
+.signals-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.signals-table tr:hover td{background:var(--bg3);cursor:pointer}
+.score-bar{display:flex;align-items:center;gap:6px}
+.score-dots{display:flex;gap:3px}
+.score-dot{width:8px;height:8px;border-radius:50%;background:var(--border2)}
+.score-dot.on-buy{background:var(--green)}
+.score-dot.on-sell{background:var(--red)}
+.signals-tabs{display:flex;gap:4px;margin-bottom:.75rem}
+.stab{background:var(--bg2);border:1px solid var(--border);color:var(--text2);
+  padding:4px 12px;border-radius:99px;font-size:.75rem;cursor:pointer;transition:all .15s}
+.stab.active{background:var(--green2);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:500}
+.stab.active-sell{background:var(--red2);border-color:rgba(248,81,73,.4);color:var(--red);font-weight:500}
 
 /* ── Panel detalle ── */
 .detail{background:var(--bg2);border:1px solid var(--border);
@@ -170,15 +203,32 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
     </select>
   </div>
 
-  <div class="tabs" id="tabs"></div>
-
-  <div class="loader" id="loader">
-    <div class="spin"></div>
-    <p>Cargando datos de mercado…</p>
+  <!-- Navegación de vistas -->
+  <div class="view-nav">
+    <button class="vnav active" id="vnav-grid"    onclick="switchView('grid')">📊 Dashboard</button>
+    <button class="vnav"        id="vnav-signals" onclick="switchView('signals')">🎯 Señales</button>
   </div>
 
-  <div class="ticker-grid" id="ticker-grid" style="display:none"></div>
-  <div class="detail"       id="detail"      style="display:none"></div>
+  <div id="view-grid">
+    <div class="tabs" id="tabs"></div>
+    <div class="loader" id="loader">
+      <div class="spin"></div>
+      <p>Cargando datos de mercado…</p>
+    </div>
+    <div class="ticker-grid" id="ticker-grid" style="display:none"></div>
+    <div class="detail"       id="detail"      style="display:none"></div>
+  </div>
+
+  <div id="view-signals" style="display:none">
+    <div class="signals-wrap">
+      <div class="signals-tabs">
+        <button class="stab active" id="stab-buy"  onclick="filterSignals('buy')">▲ Compra / Sobreventa</button>
+        <button class="stab"        id="stab-sell" onclick="filterSignals('sell')">▼ Venta / Sobrecompra</button>
+        <button class="stab"        id="stab-all"  onclick="filterSignals('all')">Todos</button>
+      </div>
+      <div id="signals-table-wrap"></div>
+    </div>
+  </div>
 
   <footer class="footer">
     Datos: <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> via yfinance ·
@@ -320,12 +370,33 @@ function applyFilters() {
     const cls  = up ? 'up' : dn ? 'dn' : 'flat';
     const sign = up ? '+' : '';
     const el   = document.createElement('div');
-    el.className = 'tc' + (d.symbol === SEL ? ' sel' : '');
+
+    // Semáforo RSI: borde izquierdo verde (sobreventa) o rojo (sobrecompra)
+    const rsiEdge = d.rsi !== null && d.rsi <= 30 ? ' rsi-green'
+                  : d.rsi !== null && d.rsi >= 70 ? ' rsi-red' : '';
+    el.className = 'tc' + (d.symbol === SEL ? ' sel' : '') + rsiEdge;
+
+    // Badges de alertas técnicas
+    const badges = [];
+    if (d.rsi !== null && d.rsi <= 30)
+      badges.push('<span class="badge badge-buy">RSI SV</span>');
+    if (d.rsi !== null && d.rsi >= 70)
+      badges.push('<span class="badge badge-sell">RSI SC</span>');
+    if (d.macd !== null && d.macd_signal !== null && d.macd > d.macd_signal)
+      badges.push('<span class="badge badge-buy">MACD ▲</span>');
+    if (d.macd !== null && d.macd_signal !== null && d.macd <= d.macd_signal)
+      badges.push('<span class="badge badge-sell">MACD ▼</span>');
+    if (d.bb_lower && d.price_usd < d.bb_lower)
+      badges.push('<span class="badge badge-buy">BB inf.</span>');
+    if (d.bb_upper && d.price_usd > d.bb_upper)
+      badges.push('<span class="badge badge-sell">BB sup.</span>');
+
     el.innerHTML = `
       <div class="tc-sym">${d.symbol}</div>
       <div class="tc-name">${d.name}</div>
       <div class="tc-price">USD ${f2(d.price_usd)}</div>
       <div class="tc-pct ${cls}">${sign}${f2(d.change_pct)}%</div>
+      ${badges.length ? '<div class="tc-badges">' + badges.join('') + '</div>' : ''}
     `;
     el.onclick = () => selectTicker(d.symbol);
     grid.appendChild(el);
@@ -335,6 +406,7 @@ function applyFilters() {
 // ── Detalle ───────────────────────────────────────────────────────────────────
 function selectTicker(sym) {
   SEL = sym;
+  if (currentView !== 'grid') switchView('grid');
   applyFilters();
   renderDetail(sym);
   const panel = document.getElementById('detail');
@@ -514,6 +586,122 @@ function renderDetail(sym) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '—';
 const f4 = v => (v !== null && v !== undefined) ? Number(v).toFixed(4) : '—';
+
+// ── Vista switching ───────────────────────────────────────────────────────────
+let currentView  = 'grid';
+let signalFilter = 'buy';
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById('view-grid').style.display    = view === 'grid'    ? '' : 'none';
+  document.getElementById('view-signals').style.display = view === 'signals' ? '' : 'none';
+  document.getElementById('vnav-grid').classList.toggle('active',    view === 'grid');
+  document.getElementById('vnav-signals').classList.toggle('active', view === 'signals');
+  if (view === 'signals') renderSignals();
+}
+
+// ── Score técnico ─────────────────────────────────────────────────────────────
+function scoreOf(d) {
+  let buy = 0, sell = 0;
+  if (d.rsi !== null) {
+    if (d.rsi <= 30) buy++; else if (d.rsi >= 70) sell++;
+  }
+  if (d.macd !== null && d.macd_signal !== null) {
+    if (d.macd > d.macd_signal) buy++; else sell++;
+  }
+  const aboveMA = [d.ma20, d.ma50, d.ma200].filter(m => m && d.price_usd > m).length;
+  if (aboveMA === 3) buy++; else if (aboveMA === 0) sell++;
+  if (d.bb_lower && d.price_usd < d.bb_lower) buy++;
+  if (d.bb_upper && d.price_usd > d.bb_upper) sell++;
+  return { buy, sell, total: buy - sell };
+}
+
+// ── Pantalla de señales ────────────────────────────────────────────────────────
+function filterSignals(f) {
+  signalFilter = f;
+  ['buy','sell','all'].forEach(x => {
+    const b = document.getElementById('stab-' + x);
+    b.className = 'stab' + (x === f ? (f === 'sell' ? ' active-sell' : ' active') : '');
+  });
+  renderSignals();
+}
+
+function renderSignals() {
+  const items = Object.values(MARKET).map(d => ({ ...d, score: scoreOf(d) }));
+  const filtered = items.filter(d => {
+    if (signalFilter === 'buy')  return d.score.total > 0;
+    if (signalFilter === 'sell') return d.score.total < 0;
+    return true;
+  }).sort((a, b) => {
+    if (signalFilter === 'sell') return a.score.total - b.score.total;
+    return b.score.total - a.score.total;
+  });
+
+  const wrap = document.getElementById('signals-table-wrap');
+  if (!filtered.length) {
+    wrap.innerHTML = '<p style="color:var(--text2);padding:1rem 0">Sin señales en este filtro.</p>';
+    return;
+  }
+
+  const rows = filtered.map(d => {
+    const s    = d.score;
+    const up   = d.change_pct > 0, dn = d.change_pct < 0;
+    const cls  = up ? 'up' : dn ? 'dn' : 'flat';
+    const sign = up ? '+' : '';
+
+    const indicators = [
+      { label:'RSI',  buy: d.rsi !== null && d.rsi <= 30,
+                       sell: d.rsi !== null && d.rsi >= 70 },
+      { label:'MACD', buy:  d.macd !== null && d.macd_signal !== null && d.macd > d.macd_signal,
+                       sell: d.macd !== null && d.macd_signal !== null && d.macd <= d.macd_signal },
+      { label:'MAs',  buy:  [d.ma20,d.ma50,d.ma200].filter(m=>m&&d.price_usd>m).length===3,
+                       sell: [d.ma20,d.ma50,d.ma200].filter(m=>m&&d.price_usd>m).length===0 },
+      { label:'BB',   buy:  !!(d.bb_lower && d.price_usd < d.bb_lower),
+                       sell: !!(d.bb_upper && d.price_usd > d.bb_upper) },
+    ];
+    const dots = indicators.map(i => {
+      const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
+      return `<div class="score-dot ${dc}" title="${i.label}"></div>`;
+    }).join('');
+
+    const scoreColor = s.total > 0 ? 'var(--green)' : s.total < 0 ? 'var(--red)' : 'var(--text2)';
+    const scoreStr   = s.total > 0 ? '+' + s.total : String(s.total);
+    const ars        = Math.round(d.price_usd * CCL).toLocaleString('es-AR');
+    const rsiColor   = d.rsi >= 70 ? 'var(--red)' : d.rsi <= 30 ? 'var(--green)' : 'var(--text)';
+    const macdStr    = d.macd !== null && d.macd_signal !== null
+      ? (d.macd > d.macd_signal
+          ? '<span style="color:var(--green)">▲ Alcista</span>'
+          : '<span style="color:var(--red)">▼ Bajista</span>')
+      : '—';
+
+    return `<tr onclick="selectTicker('${d.symbol}')">
+      <td><strong>${d.symbol}</strong><br>
+        <span style="color:var(--text3);font-size:.68rem">${d.name}</span></td>
+      <td>USD ${f2(d.price_usd)}<br>
+        <span style="color:var(--text3);font-size:.68rem">ARS ${ars}</span></td>
+      <td class="${cls}">${sign}${f2(d.change_pct)}%</td>
+      <td style="color:${rsiColor};font-weight:600">${d.rsi ?? '—'}</td>
+      <td>${macdStr}</td>
+      <td><div class="score-bar">
+        <div class="score-dots">${dots}</div>
+        <span style="font-weight:700;color:${scoreColor}">${scoreStr}</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table class="signals-table">
+      <thead><tr>
+        <th>Ticker</th><th>Precio</th><th>Var %</th>
+        <th>RSI</th><th>MACD</th>
+        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB)</span></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
+      Score: +1 señal de compra / −1 señal de venta. Hacé click en una fila para ver el detalle completo.
+    </p>`;
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 boot();
