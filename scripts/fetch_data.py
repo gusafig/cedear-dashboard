@@ -395,6 +395,48 @@ def compute_bollinger(closes, period=20, num_std=2):
     return round(mid, 2), round(mid + num_std * std, 2), round(mid - num_std * std, 2)
 
 
+
+def compute_adx(highs, lows, closes, period=14):
+    """ADX/DMI con suavizado de Wilder. Retorna (adx, pdi, ndi)."""
+    if len(closes) < period * 2 + 1:
+        return None, None, None
+
+    tr_list, pdm_list, ndm_list = [], [], []
+    for i in range(1, len(closes)):
+        high, low         = highs[i], lows[i]
+        prev_high, prev_low, prev_close = highs[i-1], lows[i-1], closes[i-1]
+        tr  = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        pdm = (high - prev_high) if (high - prev_high) > (prev_low - low) and (high - prev_high) > 0 else 0
+        ndm = (prev_low - low)   if (prev_low - low) > (high - prev_high) and (prev_low - low) > 0 else 0
+        tr_list.append(tr)
+        pdm_list.append(pdm)
+        ndm_list.append(ndm)
+
+    def wilder_smooth(data, p):
+        s = sum(data[:p])
+        result = [s]
+        for v in data[p:]:
+            s = s - (s / p) + v
+            result.append(s)
+        return result
+
+    atr_s = wilder_smooth(tr_list,  period)
+    pdm_s = wilder_smooth(pdm_list, period)
+    ndm_s = wilder_smooth(ndm_list, period)
+
+    pdi_list, ndi_list, dx_list = [], [], []
+    for i in range(len(atr_s)):
+        pdi = 100 * pdm_s[i] / atr_s[i] if atr_s[i] != 0 else 0
+        ndi = 100 * ndm_s[i] / atr_s[i] if atr_s[i] != 0 else 0
+        dx  = 100 * abs(pdi - ndi) / (pdi + ndi) if (pdi + ndi) != 0 else 0
+        pdi_list.append(pdi)
+        ndi_list.append(ndi)
+        dx_list.append(dx)
+
+    adx_s = wilder_smooth(dx_list, period)
+    return round(adx_s[-1], 2), round(pdi_list[-1], 2), round(ndi_list[-1], 2)
+
+
 # ── Descarga robusta ticker a ticker ─────────────────────────────────────────
 
 def download_ticker(sym, start_str, end_str, retries=3):
@@ -476,6 +518,7 @@ def fetch_all():
             ma200                     = compute_sma(closes, 200)
             macd_val, macd_sig, macd_hist = compute_macd(closes)
             bb_mid, bb_upper, bb_lower    = compute_bollinger(closes)
+            adx, pdi, ndi                 = compute_adx(highs, lows, closes)
 
             results[sym] = {
                 "symbol":      sym,
@@ -499,11 +542,14 @@ def fetch_all():
                 "bb_mid":      bb_mid,
                 "bb_upper":    bb_upper,
                 "bb_lower":    bb_lower,
+                "adx":         adx,
+                "pdi":         pdi,
+                "ndi":         ndi,
                 "hist_prices": hist_prices,
                 "hist_dates":  hist_dates,
             }
             ok += 1
-            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}")
+            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}")
 
         except Exception as e:
             print(f"  [ERR] {sym}: {e}")
@@ -537,4 +583,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
