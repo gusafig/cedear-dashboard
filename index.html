@@ -391,9 +391,20 @@ function applyFilters() {
     if (d.bb_upper && d.price_usd > d.bb_upper)
       badges.push('<span class="badge badge-sell">BB sup.</span>');
 
+    // Color de etiqueta según score técnico
+    const score = scoreOf(d);
+    const symColor = score.total >= 3  ? 'var(--green)'
+                   : score.total <= -3 ? 'var(--red)'
+                   : score.total >= 2  ? 'color-mix(in srgb, var(--green) 60%, var(--text))'
+                   : score.total <= -2 ? 'color-mix(in srgb, var(--red) 60%, var(--text))'
+                   : 'var(--text)';
+    const nameColor = score.total >= 2  ? 'var(--green)'
+                    : score.total <= -2 ? 'var(--red)'
+                    : 'var(--text3)';
+
     el.innerHTML = `
-      <div class="tc-sym">${d.symbol}</div>
-      <div class="tc-name">${d.name}</div>
+      <div class="tc-sym" style="color:${symColor}">${d.symbol}</div>
+      <div class="tc-name" style="color:${nameColor}">${d.name}</div>
       <div class="tc-price">USD ${f2(d.price_usd)}</div>
       <div class="tc-pct ${cls}">${sign}${f2(d.change_pct)}%</div>
       ${badges.length ? '<div class="tc-badges">' + badges.join('') + '</div>' : ''}
