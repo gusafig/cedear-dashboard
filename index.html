@@ -121,9 +121,9 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));
         gap:7px;margin-bottom:1.1rem}
 .stat{background:var(--bg3);border-radius:var(--radius);padding:9px 11px}
-.stat-lbl{font-size:.65rem;color:var(--text3);text-transform:uppercase;
+.stat-lbl{font-size:.65rem;color:#8b949e;text-transform:uppercase;
            letter-spacing:.05em;margin-bottom:3px}
-.stat-val{font-size:.9rem;font-weight:500}
+.stat-val{font-size:.9rem;font-weight:600;color:#e6edf3}
 
 /* Chart */
 .chart-section{margin-bottom:1.1rem}
@@ -570,8 +570,28 @@ function renderDetail(sym) {
   const isUp   = prices.length > 1 && prices[prices.length-1] >= prices[0];
   const lc     = isUp ? '#3fb950' : '#f85149';
 
+  // Plugin de línea vertical (crosshair) al pasar el cursor
+  const crosshairPlugin = {
+    id: 'crosshair',
+    afterDraw(chart) {
+      if (!chart._hoverX) return;
+      const ctx2 = chart.ctx;
+      const yAxis = chart.scales.y;
+      ctx2.save();
+      ctx2.beginPath();
+      ctx2.moveTo(chart._hoverX, yAxis.top);
+      ctx2.lineTo(chart._hoverX, yAxis.bottom);
+      ctx2.lineWidth = 1;
+      ctx2.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx2.setLineDash([4, 3]);
+      ctx2.stroke();
+      ctx2.restore();
+    }
+  };
+
   chart = new Chart(ctx, {
     type: 'line',
+    plugins: [crosshairPlugin],
     data: {
       labels: dates,
       datasets: [
@@ -579,41 +599,79 @@ function renderDetail(sym) {
           label: 'Precio',
           data: prices,
           borderColor: lc,
-          borderWidth: 1.5,
+          borderWidth: 2,
           pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: lc,
+          pointHoverBorderColor: '#fff',
+          pointHoverBorderWidth: 2,
           tension: 0.3,
           fill: true,
           backgroundColor: ctx2 => {
             const g = ctx2.chart.ctx.createLinearGradient(0,0,0,180);
-            g.addColorStop(0, isUp ? 'rgba(63,185,80,.18)' : 'rgba(248,81,73,.18)');
+            g.addColorStop(0, isUp ? 'rgba(63,185,80,.22)' : 'rgba(248,81,73,.22)');
             g.addColorStop(1, 'rgba(0,0,0,0)');
             return g;
           }
         },
         ...(d.bb_upper && d.bb_lower ? [
           {label:'BB Superior', data: Array(prices.length).fill(d.bb_upper),
-           borderColor:'rgba(88,166,255,.4)', borderWidth:1, borderDash:[4,3],
-           pointRadius:0, fill:false},
+           borderColor:'rgba(88,166,255,.5)', borderWidth:1, borderDash:[4,3],
+           pointRadius:0, pointHoverRadius:0, fill:false},
           {label:'BB Media', data: Array(prices.length).fill(d.bb_mid),
-           borderColor:'rgba(88,166,255,.25)', borderWidth:1, borderDash:[2,4],
-           pointRadius:0, fill:false},
+           borderColor:'rgba(88,166,255,.3)', borderWidth:1, borderDash:[2,4],
+           pointRadius:0, pointHoverRadius:0, fill:false},
           {label:'BB Inferior', data: Array(prices.length).fill(d.bb_lower),
-           borderColor:'rgba(88,166,255,.4)', borderWidth:1, borderDash:[4,3],
-           pointRadius:0, fill:false},
+           borderColor:'rgba(88,166,255,.5)', borderWidth:1, borderDash:[4,3],
+           pointRadius:0, pointHoverRadius:0, fill:false},
         ] : [])
       ]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display: !!(d.bb_upper), labels:{color:'#8b949e',font:{size:10},
-          boxWidth:12, padding:10}},
-        tooltip:{callbacks:{label:c=>' USD '+c.parsed.y.toFixed(2)}}
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      onHover(e, _, ch) {
+        ch._hoverX = e.x;
+        ch.draw();
       },
-      scales:{
-        x:{ticks:{maxTicksLimit:7,font:{size:10},color:'#484f58'},grid:{display:false}},
-        y:{ticks:{font:{size:10},color:'#484f58',callback:v=>'$'+v.toFixed(0)},
-           grid:{color:'rgba(255,255,255,0.04)'}}
+      plugins: {
+        legend: {
+          display: !!(d.bb_upper),
+          labels: { color:'#c9d1d9', font:{size:10}, boxWidth:12, padding:10 }
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#1c2128',
+          borderColor: 'rgba(255,255,255,0.15)',
+          borderWidth: 1,
+          titleColor: '#e6edf3',
+          bodyColor: '#c9d1d9',
+          padding: 10,
+          callbacks: {
+            title: items => {
+              const raw = items[0]?.label || '';
+              const dt  = new Date(raw);
+              return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
+            },
+            label: item => {
+              if (item.datasetIndex === 0)
+                return '  Precio:  USD ' + Number(item.parsed.y).toFixed(2);
+              return '  ' + item.dataset.label + ':  USD ' + Number(item.parsed.y).toFixed(2);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 7, font:{size:10}, color:'#c9d1d9' },
+          grid:  { display: false }
+        },
+        y: {
+          ticks: { font:{size:10}, color:'#c9d1d9', callback: v => '$ '+v.toFixed(0) },
+          grid:  { color:'rgba(255,255,255,0.07)' }
+        }
       }
     }
   });
@@ -754,3 +812,4 @@ boot();
 </script>
 </body>
 </html>
+
