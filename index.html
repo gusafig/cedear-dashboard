@@ -247,6 +247,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
     <button class="vnav active" id="vnav-grid"     onclick="switchView('grid')">📊 Dashboard</button>
     <button class="vnav"        id="vnav-signals"  onclick="switchView('signals')">🎯 Señales</button>
     <button class="vnav"        id="vnav-screener" onclick="switchView('screener')">🔍 Screener</button>
+    <button class="vnav"        id="vnav-ratio"    onclick="switchView('ratio')">📐 Ratio</button>
   </div>
 
   <div id="view-grid">
@@ -283,6 +284,16 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <div id="screener-count" class="screener-count"></div>
       <div class="ticker-grid" id="screener-grid"></div>
     </div>
+  </div>
+
+  <div id="view-ratio" style="display:none">
+    <div class="screener-selects" style="align-items:center">
+      <select id="ratio-a" onchange="renderRatio()"></select>
+      <span style="color:var(--text2);font-weight:600;padding:0 2px">/</span>
+      <select id="ratio-b" onchange="renderRatio()"></select>
+      <button class="tab" onclick="swapRatio()" style="flex:0 0 auto">⇄ Invertir</button>
+    </div>
+    <div id="ratio-panel"></div>
   </div>
 
 
@@ -350,6 +361,7 @@ async function loadMarket() {
 
     buildTabs();
     buildSectorSelect();
+    buildRatioSelects();
     applyFilters();
 
     document.getElementById('loader').style.display      = 'none';
@@ -890,6 +902,183 @@ const f4 = v => (v !== null && v !== undefined) ? Number(v).toFixed(4) : '—';
 const tvSymbol = sym => sym.replace('-', '.');
 const tvUrl    = sym => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(sym))}`;
 
+// ── Ratio entre dos activos ─────────────────────────────────────────────────────
+let ratioChart = null;
+
+function buildRatioSelects() {
+  const symbols = Object.values(MARKET)
+    .map(d => ({ sym: d.symbol, name: d.name }))
+    .sort((a, b) => a.sym.localeCompare(b.sym));
+
+  const selA = document.getElementById('ratio-a');
+  const selB = document.getElementById('ratio-b');
+  const opts = symbols.map(s => `<option value="${s.sym}">${s.sym} · ${s.name}</option>`).join('');
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+
+  if (symbols.length > 1) {
+    selA.value = symbols[0].sym;
+    selB.value = symbols[1].sym;
+  }
+}
+
+function swapRatio() {
+  const selA = document.getElementById('ratio-a');
+  const selB = document.getElementById('ratio-b');
+  const tmp = selA.value;
+  selA.value = selB.value;
+  selB.value = tmp;
+  renderRatio();
+}
+
+function renderRatio() {
+  const selA = document.getElementById('ratio-a');
+  const selB = document.getElementById('ratio-b');
+  if (!selA || !selA.value || !selB.value) return;
+
+  const symA = selA.value, symB = selB.value;
+  const dA = MARKET[symA], dB = MARKET[symB];
+  const panel = document.getElementById('ratio-panel');
+  if (!dA || !dB) { panel.innerHTML = ''; return; }
+
+  if (symA === symB) {
+    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">Elegí dos activos distintos para comparar.</p>';
+    return;
+  }
+
+  // Alineamos por fecha (intersección), por si algún ticker tiene menos historial
+  const mapA = {}, mapB = {};
+  (dA.hist_dates || []).forEach((dt, i) => mapA[dt] = dA.hist_prices[i]);
+  (dB.hist_dates || []).forEach((dt, i) => mapB[dt] = dB.hist_prices[i]);
+  const dates = Object.keys(mapA).filter(dt => dt in mapB).sort();
+
+  if (dates.length < 2) {
+    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">No hay suficiente historial compartido entre estos dos activos.</p>';
+    return;
+  }
+
+  const ratios   = dates.map(dt => mapA[dt] / mapB[dt]);
+  const current  = ratios[ratios.length - 1];
+  const first    = ratios[0];
+  const max      = Math.max(...ratios);
+  const min      = Math.min(...ratios);
+  const avg      = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+  const chgPct   = ((current - first) / first) * 100;
+  const vsAvgPct = ((current - avg) / avg) * 100;
+  const up = chgPct > 0, dn = chgPct < 0;
+  const sign = up ? '+' : '';
+
+  panel.innerHTML = `
+    <div class="detail" style="margin-bottom:1.5rem">
+      <div class="d-head">
+        <div>
+          <div class="d-sym">${symA} / ${symB}</div>
+          <div class="d-name">${dA.name} respecto de ${dB.name}</div>
+        </div>
+        <div class="d-price">
+          <div class="d-usd">${f4(current)}
+            <span style="font-size:.95rem;color:${up?'var(--green)':dn?'var(--red)':'var(--text2)'}">${sign}${f2(chgPct)}%</span>
+          </div>
+          <div class="d-ars">últimos ${dates.length} días</div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-lbl">Ratio actual</div>
+          <div class="stat-val">${f4(current)}</div></div>
+        <div class="stat"><div class="stat-lbl">Máx. del período</div>
+          <div class="stat-val">${f4(max)}</div></div>
+        <div class="stat"><div class="stat-lbl">Mín. del período</div>
+          <div class="stat-val">${f4(min)}</div></div>
+        <div class="stat"><div class="stat-lbl">Promedio período</div>
+          <div class="stat-val">${f4(avg)}</div></div>
+        <div class="stat"><div class="stat-lbl">Vs. promedio</div>
+          <div class="stat-val" style="color:${vsAvgPct>0?'var(--green)':'var(--red)'}">${vsAvgPct>0?'+':''}${f2(vsAvgPct)}%</div></div>
+        <div class="stat"><div class="stat-lbl">${symA}</div>
+          <div class="stat-val">USD ${f2(dA.price_usd)}</div></div>
+        <div class="stat"><div class="stat-lbl">${symB}</div>
+          <div class="stat-val">USD ${f2(dB.price_usd)}</div></div>
+      </div>
+
+      <div class="section-lbl">Ratio ${symA} / ${symB} · últimos ${dates.length} días</div>
+      <div class="chart-wrap"><canvas id="rchart"></canvas></div>
+
+      <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
+        Ratio = precio ${symA} (USD) ÷ precio ${symB} (USD). Al ser ambos activos valuados en USD,
+        el tipo de cambio se cancela y el ratio refleja la fuerza relativa de un activo contra el otro.
+      </p>
+    </div>
+  `;
+
+  const ctx = document.getElementById('rchart').getContext('2d');
+  if (ratioChart) ratioChart.destroy();
+  const isUp = ratios[ratios.length-1] >= ratios[0];
+  const lc = isUp ? '#3fb950' : '#f85149';
+
+  ratioChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        label: `${symA}/${symB}`,
+        data: ratios,
+        borderColor: lc,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: lc,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        backgroundColor: ctx2 => {
+          const g = ctx2.chart.ctx.createLinearGradient(0,0,0,180);
+          g.addColorStop(0, isUp ? 'rgba(63,185,80,.22)' : 'rgba(248,81,73,.22)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          return g;
+        }
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#1c2128',
+          borderColor: 'rgba(255,255,255,0.15)',
+          borderWidth: 1,
+          titleColor: '#e6edf3',
+          bodyColor: '#c9d1d9',
+          padding: 10,
+          callbacks: {
+            title: items => {
+              const raw = items[0]?.label || '';
+              const [y, m, day] = raw.split('-').map(Number);
+              const dt = new Date(y, m - 1, day);
+              return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
+            },
+            label: item => '  Ratio:  ' + Number(item.parsed.y).toFixed(4)
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 7, font:{size:10}, color:'#c9d1d9' },
+          grid:  { display: false }
+        },
+        y: {
+          ticks: { font:{size:10}, color:'#c9d1d9', callback: v => Number(v).toFixed(2) },
+          grid:  { color:'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
 // ── Vista switching ───────────────────────────────────────────────────────────
 let currentView  = 'grid';
 let signalFilter = 'buy';
@@ -899,11 +1088,14 @@ function switchView(view) {
   document.getElementById('view-grid').style.display     = view === 'grid'     ? '' : 'none';
   document.getElementById('view-signals').style.display  = view === 'signals'  ? '' : 'none';
   document.getElementById('view-screener').style.display  = view === 'screener' ? '' : 'none';
+  document.getElementById('view-ratio').style.display     = view === 'ratio'    ? '' : 'none';
   document.getElementById('vnav-grid').classList.toggle('active',     view === 'grid');
   document.getElementById('vnav-signals').classList.toggle('active',  view === 'signals');
   document.getElementById('vnav-screener').classList.toggle('active', view === 'screener');
+  document.getElementById('vnav-ratio').classList.toggle('active',    view === 'ratio');
   if (view === 'signals')  renderSignals();
   if (view === 'screener') applyScreener();
+  if (view === 'ratio')    renderRatio();
 }
 
 // ── Screener: 3 condiciones combinables (AND) ──────────────────────────────────
