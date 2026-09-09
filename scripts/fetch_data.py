@@ -14,8 +14,10 @@ from datetime import datetime, timedelta
 import yfinance as yf
 
 # ── Universo CEDEAR — NYSE / NASDAQ únicamente ────────────────────────────────
-# Fuente: listado oficial BYMA 03/02/2026
-# Excluidos: B3, Frankfurt, London SE, OTC (Yahoo Finance no los cubre bien)
+# Fuente: listado oficial BYMA, actualizado al 02/09/2026
+# Incluye NYSE, NASDAQ y sus variantes (NYSE Arca, NYSE American, NASDAQ GS/GM/CM).
+# Excluidos: B3, Frankfurt, London SE, Xetra, Bovespa, OTC puro (Yahoo Finance
+# no los cubre bien) y ADRs deslistados/discontinuados (ver detalle más abajo).
 
 CEDEARS = {
     # Tecnología
@@ -314,6 +316,137 @@ CEDEARS = {
     "HUT":   {"name": "Hut 8 Mining",              "sector": "crypto"},
     "IREN":  {"name": "Iren Ltd",                  "sector": "crypto"},
     "MARA":  {"name": "Marathon Digital",          "sector": "crypto"},
+    # ──────────────────────────────────────────────────────────────
+    # Nuevos CEDEARs incorporados — listado oficial BYMA (actualizado 02/09/2026)
+    # Se agregan las acciones/ETFs del listado BYMA que cotizan en NYSE /
+    # NASDAQ (incl. NYSE Arca, NYSE American, NASDAQ GS/GM/CM) y que no
+    # estaban en el universo. Cuando el código de BYMA difiere del ticker
+    # real en Yahoo Finance se usa el ticker real (aclarado en el comentario).
+    #
+    # Quedan afuera del listado BYMA por estar deslistados/discontinuados:
+    # AABA (Altaba), CS (Credit Suisse), SI (Silvergate Bancorp),
+    # AUY (Yamana Gold), TWTR (Twitter), WBA (Walgreens, privada desde 2025),
+    # MBT (Mobile TeleSystems, sancionada), TTM (Tata Motors, deslistó su ADR
+    # en 2023), PTR (PetroChina) y AOCA (Aluminum Corp of China/Chalco).
+    # También quedan afuera por ser el mismo ticker ya presente con otro
+    # código BYMA: BA.C (=BAC), DISN (=DIS), KEEL (=BITF).
+    # ──────────────────────────────────────────────────────────────
+    # Tecnología
+    "ANET":  {"name": "Arista Networks",                           "sector": "tech"},
+    "CRWD":  {"name": "CrowdStrike",                               "sector": "tech"},
+    "DELL":  {"name": "Dell Technologies",                         "sector": "tech"},
+    "EA":    {"name": "Electronic Arts",                           "sector": "tech"},
+    "ERIC":  {"name": "Ericsson",                                  "sector": "tech"},
+    "KLAC":  {"name": "KLA Corp",                                  "sector": "tech"},
+    "NOK":   {"name": "Nokia",                                     "sector": "tech"},  # BYMA usa 'NOKA'; ticker real Yahoo es 'NOK'
+    "CAJ":   {"name": "Canon",                                     "sector": "tech"},
+    "SPCX":  {"name": "SpaceX (Space Exploration Technologies)",   "sector": "tech"},  # Debutó en NASDAQ en 2026
+    "NBIS":  {"name": "Nebius Group",                              "sector": "tech"},
+    "SNDK":  {"name": "SanDisk",                                   "sector": "tech"},  # Spin-off de Western Digital (2025)
+    "WDC":   {"name": "Western Digital",                           "sector": "tech"},
+    "FI":    {"name": "Fiserv",                                    "sector": "tech"},  # BYMA usa 'FISV'; cambió su ticker a 'FI' en NYSE en 2023
+    "JMIA":  {"name": "Jumia Technologies",                        "sector": "tech"},
+    "JOYY":  {"name": "JOYY Inc",                                  "sector": "tech"},
+    "SDA":   {"name": "SunCar Technology Group",                   "sector": "tech"},
+    "UPST":  {"name": "Upstart Holdings",                          "sector": "tech"},
+    "YELP":  {"name": "Yelp",                                      "sector": "tech"},
+    "TRIP":  {"name": "Tripadvisor",                               "sector": "tech"},
+    "SPCE":  {"name": "Virgin Galactic",                           "sector": "tech"},
+    "ONDS":  {"name": "Ondas Holdings",                            "sector": "tech"},
+    "BB":    {"name": "BlackBerry",                                "sector": "tech"},
+    "CLS":   {"name": "Celestica",                                 "sector": "tech"},
+    "XYZ":   {"name": "Block (ex-Square)",                         "sector": "tech"},
+    # Finanzas
+    "IBKR":  {"name": "Interactive Brokers",                       "sector": "finance"},
+    "AEG":   {"name": "Aegon",                                     "sector": "finance"},
+    "BCS":   {"name": "Barclays",                                  "sector": "finance"},
+    "BBVA":  {"name": "BBVA (Banco Bilbao Vizcaya Argentaria)",    "sector": "finance"},  # BYMA usa 'BBV'; ticker real Yahoo es 'BBVA'
+    "LYG":   {"name": "Lloyds Banking Group",                      "sector": "finance"},
+    "MFG":   {"name": "Mizuho Financial Group",                    "sector": "finance"},
+    "MUFG":  {"name": "Mitsubishi UFJ Financial Group",            "sector": "finance"},
+    "NMR":   {"name": "Nomura Holdings",                           "sector": "finance"},
+    "BRK-B": {"name": "Berkshire Hathaway (Cl. B)",                "sector": "finance"},  # BYMA usa 'BRKB'; en Yahoo se escribe 'BRK-B'
+    "O":     {"name": "Realty Income",                             "sector": "finance"},  # REIT
+    "PLD":   {"name": "Prologis",                                  "sector": "finance"},  # REIT
+    "WELL":  {"name": "Welltower",                                 "sector": "finance"},  # REIT
+    # Energía
+    "SHEL":  {"name": "Shell",                                     "sector": "energy"},
+    "NEE":   {"name": "NextEra Energy",                            "sector": "energy"},
+    "NGG":   {"name": "National Grid",                             "sector": "energy"},
+    "KEP":   {"name": "Korea Electric Power",                      "sector": "energy"},
+    "FSLR":  {"name": "First Solar",                               "sector": "energy"},
+    "TLN":   {"name": "Talen Energy",                              "sector": "energy"},
+    "GPRK":  {"name": "GeoPark",                                   "sector": "energy"},
+    "GLNG":  {"name": "Golar LNG",                                 "sector": "energy"},
+    "E":     {"name": "Eni SpA",                                   "sector": "energy"},
+    # Consumo
+    "DEO":   {"name": "Diageo",                                    "sector": "consumer"},
+    "UL":    {"name": "Unilever",                                  "sector": "consumer"},
+    "ORLY":  {"name": "O'Reilly Automotive",                       "sector": "consumer"},
+    "DECK":  {"name": "Deckers Outdoor (HOKA/UGG)",                "sector": "consumer"},
+    "ANF":   {"name": "Abercrombie & Fitch",                       "sector": "consumer"},
+    "STLA":  {"name": "Stellantis",                                "sector": "consumer"},
+    "SYY":   {"name": "Sysco",                                     "sector": "consumer"},
+    "T":     {"name": "AT&T",                                      "sector": "consumer"},
+    "VZ":    {"name": "Verizon Communications",                    "sector": "consumer"},
+    "TMUS":  {"name": "T-Mobile US",                               "sector": "consumer"},
+    "ORAN":  {"name": "Orange S.A.",                               "sector": "consumer"},
+    "HIMS":  {"name": "Hims & Hers Health",                        "sector": "consumer"},  # También podría ir en salud
+    "URBN":  {"name": "Urban Outfitters",                          "sector": "consumer"},
+    "VOD":   {"name": "Vodafone Group",                            "sector": "consumer"},
+    "AAP":   {"name": "Advance Auto Parts",                        "sector": "consumer"},
+    "CAR":   {"name": "Avis Budget Group",                         "sector": "consumer"},
+    # Salud
+    "NVO":   {"name": "Novo Nordisk",                              "sector": "health"},
+    "PHG":   {"name": "Koninklijke Philips",                       "sector": "health"},
+    "NTRA":  {"name": "Natera",                                    "sector": "health"},
+    # Industrial / Materiales
+    "LIN":   {"name": "Linde",                                     "sector": "industrial"},
+    "SHW":   {"name": "Sherwin-Williams",                          "sector": "industrial"},
+    "GT":    {"name": "Goodyear Tire & Rubber",                    "sector": "industrial"},
+    "HWM":   {"name": "Howmet Aerospace",                          "sector": "industrial"},
+    "GEV":   {"name": "GE Vernova",                                "sector": "industrial"},
+    "NUE":   {"name": "Nucor",                                     "sector": "industrial"},
+    "PKX":   {"name": "POSCO Holdings",                            "sector": "industrial"},  # BYMA usa 'PKS'; ticker real Yahoo es 'PKX'
+    "CAAP":  {"name": "Corporación América Airports",              "sector": "industrial"},  # Empresa argentina
+    "TRV":   {"name": "The Travelers Companies",                   "sector": "industrial"},  # BYMA usa 'TRVV'; ticker real Yahoo es 'TRV'
+    "XRX":   {"name": "Xerox Holding",                             "sector": "industrial"},  # BYMA usa 'XROX'; ticker real Yahoo es 'XRX'
+    "PBI":   {"name": "Pitney Bowes",                              "sector": "industrial"},
+    "PCAR":  {"name": "Paccar",                                    "sector": "industrial"},
+    "SNA":   {"name": "Snap-on",                                   "sector": "industrial"},
+    "PSO":   {"name": "Pearson",                                   "sector": "industrial"},
+    "SHPW":  {"name": "Shapeways Holdings",                        "sector": "industrial"},
+    # Minería / Metales
+    "CCJ":   {"name": "Cameco",                                    "sector": "mining"},
+    "MOS":   {"name": "The Mosaic Co",                             "sector": "mining"},
+    "MP":    {"name": "MP Materials",                              "sector": "mining"},
+    "LAAC":  {"name": "Lithium Americas (Argentina) Corp",         "sector": "mining"},  # BYMA usa 'LAR'; ticker real Yahoo es 'LAAC'
+    "B":     {"name": "Barrick Mining Corp (ex-Barrick Gold)",     "sector": "mining"},  # Cambió de ticker GOLD→B en mayo 2025
+    "NG":    {"name": "Novagold Resources",                        "sector": "mining"},
+    # Brasil / LatAm
+    "BIOX":  {"name": "Bioceres Crop Solutions",                   "sector": "brasil"},  # Empresa argentina (agtech)
+    "TEN":   {"name": "Tenaris",                                   "sector": "brasil"},  # Grupo Techint, Argentina/Luxemburgo
+    "AKO.B": {"name": "Embotelladora Andina (Coca-Cola Andina)",   "sector": "brasil"},  # LatAm - Chile
+    "LND":   {"name": "Brasilagro",                                "sector": "brasil"},
+    "TX":    {"name": "Ternium",                                   "sector": "brasil"},  # BYMA usa 'TXR'; ticker real Yahoo es 'TX' (grupo Techint)
+    # México
+    "KOF":   {"name": "Coca-Cola FEMSA",                           "sector": "mexico"},  # BYMA usa 'KOFM'; ticker real Yahoo es 'KOF'
+    # China
+    "WBO":   {"name": "Weibo",                                     "sector": "china"},
+    # ETFs
+    "CIBR":  {"name": "First Trust NASDAQ Cybersecurity ETF",      "sector": "etf"},
+    "ESGU":  {"name": "iShares ESG Aware MSCI USA ETF",            "sector": "etf"},
+    "EWY":   {"name": "iShares MSCI South Korea ETF",              "sector": "etf"},
+    "ICLN":  {"name": "iShares Global Clean Energy ETF",           "sector": "etf"},
+    "IEUR":  {"name": "iShares Core MSCI Europe ETF",              "sector": "etf"},
+    "IJH":   {"name": "iShares Core S&P Mid-Cap ETF",              "sector": "etf"},
+    "IVE":   {"name": "iShares S&P 500 Value ETF",                 "sector": "etf"},
+    "IVW":   {"name": "iShares S&P 500 Growth ETF",                "sector": "etf"},
+    "RSP":   {"name": "Invesco S&P 500 Equal Weight ETF",          "sector": "etf"},
+    "SPHQ":  {"name": "Invesco S&P 500 Quality ETF",               "sector": "etf"},
+    "XME":   {"name": "SPDR S&P Metals & Mining ETF",              "sector": "etf"},
+    # Crypto mining
+    "BMNR":  {"name": "Bitmine Immersion Technologies",            "sector": "crypto"},
 }
 
 TICKERS = sorted(CEDEARS.keys())
