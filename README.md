@@ -65,16 +65,31 @@ cedear-dashboard/
 
 ---
 
-## 📈 Acciones incluidas (~50 CEDEARs)
+## 📈 Acciones incluidas (388 CEDEARs)
 
-| Sector | Tickers |
-|--------|---------|
-| Tecnología | AAPL, MSFT, GOOGL, AMZN, TSLA, META, NVDA, NFLX, ORCL, CRM, INTC, AMD, QCOM, ADBE, PYPL, UBER, SPOT, SHOP |
-| Finanzas | JPM, GS, BAC, C, WFC, MS, BLK, AXP, V, MA |
-| Energía | XOM, CVX, COP, SLB, BP |
-| Consumo | WMT, KO, PG, MCD, NKE, SBUX, DIS, AMGN |
-| Salud | JNJ, PFE, MRK, ABBV, UNH, LLY |
-| Industrial | CAT, BA, GE, MMM, HON |
+Universo actualizado según el listado oficial de BYMA (02/09/2026): todas las
+acciones y ETFs con CEDEAR en BYMA cuyo activo subyacente cotiza en NYSE o
+NASDAQ (incluye NYSE Arca, NYSE American y las variantes NASDAQ GS/GM/CM).
+Quedan afuera los subyacentes que cotizan en B3, Frankfurt, Xetra, London SE,
+Bovespa u OTC puro, y los ADRs deslistados o discontinuados (ver el comentario
+al inicio del diccionario `CEDEARS` en `scripts/fetch_data.py` para el detalle
+de exclusiones y de los casos donde el código de BYMA difiere del ticker real
+de Yahoo Finance, p. ej. Fiserv BYMA=FISV → Yahoo=FI).
+
+| Sector | Cantidad |
+|--------|----------|
+| Tecnología | 93 |
+| ETFs | 53 |
+| Consumo | 45 |
+| Finanzas | 41 |
+| Industrial / Materiales | 41 |
+| Energía | 25 |
+| Salud | 24 |
+| Minería / Metales | 22 |
+| Brasil / LatAm | 22 |
+| China | 10 |
+| México | 6 |
+| Crypto mining | 6 |
 
 Para agregar o quitar tickers, editá el diccionario `CEDEARS` en `scripts/fetch_data.py`.
 
