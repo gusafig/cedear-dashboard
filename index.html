@@ -10,7 +10,7 @@
 :root{
   --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#2d333b;
   --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
-  --text:#e6edf3;--text2:#9ea7b3;--text3:#7d8590;
+  --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
   --blue:#58a6ff;--blue2:rgba(88,166,255,0.12);
   --green:#3fb950;--green2:rgba(63,185,80,0.12);
   --red:#f85149;--red2:rgba(248,81,73,0.12);
@@ -18,7 +18,7 @@
   --purple:#bc8cff;--purple2:rgba(188,140,255,0.12);
   --radius:8px;--radius-lg:12px;
 }
-html{font-size:14px;font-family:'Inter',system-ui,sans-serif;font-weight:500}
+html{font-size:14px;font-family:'Inter',system-ui,sans-serif}
 body{background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ── Layout ── */
@@ -79,6 +79,22 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .badge-sell{color:var(--red);background:var(--red2)}
 .badge-buy{color:var(--green);background:var(--green2)}
 .badge-purple{color:var(--purple);background:var(--purple2)}
+.tc-tv{position:absolute;top:8px;right:8px;font-size:.6rem;color:var(--text3);
+       text-decoration:none;padding:2px 5px;border-radius:6px;border:1px solid var(--border);
+       background:var(--bg);opacity:.8;transition:all .15s;z-index:2}
+.tc-tv:hover{opacity:1;color:var(--blue);border-color:rgba(88,166,255,.4)}
+
+/* ── Botón volver arriba ── */
+.back-to-top{position:fixed;bottom:22px;right:22px;width:42px;height:42px;border-radius:50%;
+  background:var(--blue2);border:1px solid rgba(88,166,255,.4);color:var(--blue);
+  font-size:1.15rem;cursor:pointer;display:none;align-items:center;justify-content:center;
+  box-shadow:0 2px 12px rgba(0,0,0,.4);z-index:50;transition:all .15s}
+.back-to-top:hover{background:rgba(88,166,255,.28)}
+.back-to-top.show{display:flex}
+.detail-tv{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--blue);
+  text-decoration:none;border:1px solid rgba(88,166,255,.35);background:var(--blue2);
+  padding:4px 10px;border-radius:99px;transition:all .15s}
+.detail-tv:hover{background:rgba(88,166,255,.24)}
 
 /* ── View nav ── */
 .view-nav{display:flex;gap:4px;margin-bottom:1rem}
@@ -121,7 +137,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));
         gap:7px;margin-bottom:1.1rem}
 .stat{background:var(--bg3);border-radius:var(--radius);padding:9px 11px}
-.stat-lbl{font-size:.65rem;color:var(--text2);text-transform:uppercase;
+.stat-lbl{font-size:.65rem;color:#8b949e;text-transform:uppercase;
            letter-spacing:.05em;margin-bottom:3px}
 .stat-val{font-size:.9rem;font-weight:600;color:#e6edf3}
 
@@ -166,6 +182,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 </style>
 </head>
 <body>
+<button class="back-to-top" id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Volver arriba">↑</button>
 <div class="shell">
 
   <header class="hdr">
@@ -193,10 +210,21 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <option value="sym">A – Z</option>
       <option value="pct_desc">Mayor variación +</option>
       <option value="pct_asc">Mayor variación −</option>
-      <option value="rsi_asc">RSI menor (sobreventa)</option>
-      <option value="rsi_desc">RSI mayor (sobrecompra)</option>
       <option value="price_desc">Precio USD ↓</option>
       <option value="price_asc">Precio USD ↑</option>
+      <option value="rsi_asc">RSI menor (sobreventa)</option>
+      <option value="rsi_desc">RSI mayor (sobrecompra)</option>
+      <option value="stoch_asc">Estocástico menor (sobreventa)</option>
+      <option value="stoch_desc">Estocástico mayor (sobrecompra)</option>
+      <option value="macd_hist_desc">MACD histograma ↓ (más alcista)</option>
+      <option value="adx_desc">ADX ↓ (tendencia más fuerte)</option>
+      <option value="roc_desc">ROC ↓ (más momentum +)</option>
+      <option value="roc_asc">ROC ↑ (más momentum −)</option>
+      <option value="vol_rel_desc">Volumen relativo ↓ (picos)</option>
+      <option value="pct_high_asc">Más cerca del máx. 52 sem.</option>
+      <option value="pct_low_asc">Más cerca del mín. 52 sem.</option>
+      <option value="beta_desc">Beta ↓ (más volátil)</option>
+      <option value="beta_asc">Beta ↑ (más defensiva)</option>
     </select>
     <select id="sector-sel" onchange="filterBySector()">
       <option value="">Todos los sectores</option>
@@ -207,7 +235,6 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
   <div class="view-nav">
     <button class="vnav active" id="vnav-grid"    onclick="switchView('grid')">📊 Dashboard</button>
     <button class="vnav"        id="vnav-signals" onclick="switchView('signals')">🎯 Señales</button>
-    <button class="vnav"        id="vnav-ratio"   onclick="switchView('ratio')">📐 Ratio</button>
   </div>
 
   <div id="view-grid">
@@ -229,16 +256,6 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       </div>
       <div id="signals-table-wrap"></div>
     </div>
-  </div>
-
-  <div id="view-ratio" style="display:none">
-    <div class="controls">
-      <select id="ratio-a" onchange="renderRatio()"></select>
-      <span style="color:var(--text2);font-weight:600">/</span>
-      <select id="ratio-b" onchange="renderRatio()"></select>
-      <button class="tab" onclick="swapRatio()">⇄ Invertir</button>
-    </div>
-    <div id="ratio-panel"></div>
   </div>
 
   <footer class="footer">
@@ -304,7 +321,6 @@ async function loadMarket() {
 
     buildTabs();
     buildSectorSelect();
-    buildRatioSelects();
     applyFilters();
 
     document.getElementById('loader').style.display      = 'none';
@@ -372,6 +388,17 @@ function applyFilters() {
     if (by === 'rsi_desc')  return (b.rsi ?? -1)  - (a.rsi ?? -1);
     if (by === 'price_desc')return b.price_usd - a.price_usd;
     if (by === 'price_asc') return a.price_usd - b.price_usd;
+    if (by === 'stoch_asc') return (a.stoch_k ?? 999) - (b.stoch_k ?? 999);
+    if (by === 'stoch_desc')return (b.stoch_k ?? -1)  - (a.stoch_k ?? -1);
+    if (by === 'macd_hist_desc') return (b.macd_hist ?? -1e9) - (a.macd_hist ?? -1e9);
+    if (by === 'adx_desc')  return (b.adx ?? -1) - (a.adx ?? -1);
+    if (by === 'roc_desc')  return (b.roc ?? -1e9) - (a.roc ?? -1e9);
+    if (by === 'roc_asc')   return (a.roc ?? 1e9) - (b.roc ?? 1e9);
+    if (by === 'vol_rel_desc') return (b.vol_rel ?? -1) - (a.vol_rel ?? -1);
+    if (by === 'pct_high_asc') return (b.pct_from_52w_high ?? -1e9) - (a.pct_from_52w_high ?? -1e9);
+    if (by === 'pct_low_asc')  return (a.pct_from_52w_low ?? 1e9) - (b.pct_from_52w_low ?? 1e9);
+    if (by === 'beta_desc') return (b.beta ?? -1e9) - (a.beta ?? -1e9);
+    if (by === 'beta_asc')  return (a.beta ?? 1e9) - (b.beta ?? 1e9);
     return 0;
   });
 
@@ -402,14 +429,6 @@ function applyFilters() {
       badges.push('<span class="badge badge-buy">BB inf.</span>');
     if (d.bb_upper && d.price_usd > d.bb_upper)
       badges.push('<span class="badge badge-sell">BB sup.</span>');
-    if (d.ma_cross_event === 'golden_cross')
-      badges.push('<span class="badge badge-buy">Golden Cross</span>');
-    if (d.ma_cross_event === 'death_cross')
-      badges.push('<span class="badge badge-sell">Death Cross</span>');
-    if (d.divergence === 'alcista')
-      badges.push('<span class="badge badge-buy">Div. ▲</span>');
-    if (d.divergence === 'bajista')
-      badges.push('<span class="badge badge-sell">Div. ▼</span>');
 
     // Color de fondo según score técnico combinado
     const score = scoreOf(d);
@@ -427,6 +446,7 @@ function applyFilters() {
     if (cardBrd) el.style.borderColor = cardBrd;
 
     el.innerHTML = `
+      <a class="tc-tv" href="${tvUrl(d.symbol)}" target="_blank" rel="noopener" title="Ver en TradingView" onclick="event.stopPropagation()">TV ↗</a>
       <div class="tc-sym">${d.symbol}</div>
       <div class="tc-name">${d.name}</div>
       <div class="tc-price">USD ${f2(d.price_usd)}</div>
@@ -447,7 +467,13 @@ function selectTicker(sym) {
   const panel = document.getElementById('detail');
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  document.getElementById('back-to-top').classList.add('show');
 }
+
+// Botón "volver arriba": visible una vez que se scrolleó un poco (p.ej. al abrir un gráfico)
+window.addEventListener('scroll', () => {
+  document.getElementById('back-to-top').classList.toggle('show', window.scrollY > 250);
+});
 
 function renderDetail(sym) {
   const d = MARKET[sym];
@@ -484,30 +510,28 @@ function renderDetail(sym) {
   const bbLbl = d.bb_upper && d.price_usd > d.bb_upper ? 'Sobre banda sup.' :
                 d.bb_lower && d.price_usd < d.bb_lower ? 'Bajo banda inf.'  : 'Dentro bandas';
 
-  // Cruce de medias (Golden/Death Cross)
-  const crossLbl = { golden_cross: 'Golden Cross reciente', death_cross: 'Death Cross reciente' };
-  const [crossCls, crossLbl2] =
-    d.ma_cross_event === 'golden_cross' ? ['sig-buy',  crossLbl.golden_cross] :
-    d.ma_cross_event === 'death_cross'  ? ['sig-sell', crossLbl.death_cross]  :
-    d.ma_cross_status === 'alcista'     ? ['sig-neutral', 'MA50 > MA200 (alcista)'] :
-    d.ma_cross_status === 'bajista'     ? ['sig-neutral', 'MA50 < MA200 (bajista)'] :
-                                           ['sig-neutral', 'Sin datos (necesita 200+ ruedas)'];
+  // Estocástico
+  const [stochCls, stochLbl] = d.stoch_k === null ? ['sig-neutral','Sin datos'] :
+                                d.stoch_k <= 20    ? ['sig-buy','Sobreventa']    :
+                                d.stoch_k >= 80     ? ['sig-sell','Sobrecompra']  : ['sig-neutral','Neutral'];
 
-  // OBV (volumen)
-  const obvLbl = {
-    confirma_suba:       ['sig-buy',  'Volumen confirma la suba'],
-    confirma_baja:       ['sig-sell', 'Volumen confirma la baja'],
-    divergencia_alcista: ['sig-buy',  'Divergencia alcista (acumulación)'],
-    divergencia_bajista: ['sig-sell', 'Divergencia bajista (distribución)'],
-    neutral:             ['sig-neutral', 'Neutral'],
-  };
-  const [obvCls, obvLbl2] = obvLbl[d.obv_signal] || ['sig-neutral', 'Sin datos'];
+  // ROC (momentum)
+  const [rocCls, rocLbl] = d.roc === null ? ['sig-neutral','Sin datos'] :
+                            d.roc > 0     ? ['sig-buy','Momentum positivo']    :
+                            d.roc < 0     ? ['sig-sell','Momentum negativo']   : ['sig-neutral','Plano'];
 
-  // Divergencia RSI vs. precio
-  const [divCls, divLbl] =
-    d.divergence === 'alcista' ? ['sig-buy',  'Divergencia alcista (RSI)'] :
-    d.divergence === 'bajista' ? ['sig-sell', 'Divergencia bajista (RSI)'] :
-                                  ['sig-neutral', 'Sin divergencia'];
+  // Volumen relativo (confirma o no la dirección del movimiento del día)
+  const volSpike = d.vol_rel !== null && d.vol_rel >= 2;
+  const [volCls, volLbl] = d.vol_rel === null ? ['sig-neutral','Sin datos'] :
+                            volSpike && up     ? ['sig-buy','Pico con suba (convicción)']  :
+                            volSpike && dn     ? ['sig-sell','Pico con baja (convicción)'] :
+                            volSpike           ? ['sig-neutral','Pico de volumen']         :
+                                                  ['sig-neutral','Volumen normal'];
+
+  // Beta vs. SPY (lectura de volatilidad relativa, no es señal de compra/venta)
+  const [betaCls, betaLbl] = d.beta === null ? ['sig-neutral','Sin datos'] :
+                              d.beta > 1.2    ? ['sig-neutral','Más volátil que el mercado'] :
+                              d.beta < 0.8    ? ['sig-neutral','Menos volátil (defensiva)']  : ['sig-neutral','Similar al mercado'];
 
   const secLbl = SECTOR_LABEL[d.sector] || d.sector;
 
@@ -517,7 +541,9 @@ function renderDetail(sym) {
         <div class="d-sym">${sym}
           <span style="font-size:.9rem;font-weight:400;color:var(--text2)">${d.name}</span>
         </div>
-        <div class="d-name">Sector: ${secLbl} &nbsp;·&nbsp; CEDEAR disponible en BYMA</div>
+        <div class="d-name">Sector: ${secLbl} &nbsp;·&nbsp; CEDEAR disponible en BYMA
+          &nbsp;·&nbsp; <a class="detail-tv" href="${tvUrl(d.symbol)}" target="_blank" rel="noopener">Ver en TradingView ↗</a>
+        </div>
       </div>
       <div class="d-price">
         <div class="d-usd">USD ${f2(d.price_usd)}
@@ -605,25 +631,44 @@ function renderDetail(sym) {
       </div>
 
       <div class="ind">
-        <div class="ind-lbl">Cruce de medias (50/200)</div>
-        <div class="ind-row"><span>MA 50</span><span>${d.ma50 ? '$'+f2(d.ma50) : '—'}</span></div>
-        <div class="ind-row"><span>MA 200</span><span>${d.ma200 ? '$'+f2(d.ma200) : '—'}</span></div>
-        <div style="margin-top:8px"><span class="sig ${crossCls}">${crossLbl2}</span></div>
+        <div class="ind-lbl">Estocástico (14,3)</div>
+        <div class="ind-big" style="color:${d.stoch_k>=80?'var(--red)':d.stoch_k<=20?'var(--green)':'var(--blue)'}">${d.stoch_k ?? '—'}</div>
+        <div class="ind-bar-bg"><div class="ind-bar-fill" style="width:${d.stoch_k??0}%;background:${d.stoch_k>=80?'var(--red)':d.stoch_k<=20?'var(--green)':'var(--blue)'}"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--text3);margin-bottom:6px">
+          <span>0</span><span>20</span><span>80</span><span>100</span></div>
+        <div class="ind-row"><span>%D (señal)</span><span>${f2(d.stoch_d)}</span></div>
+        <div style="margin-top:8px"><span class="sig ${stochCls}">${stochLbl}</span></div>
       </div>
 
       <div class="ind">
-        <div class="ind-lbl">OBV (Volumen)</div>
-        <div class="ind-row"><span>Volumen del día</span><span>${fmtVol}</span></div>
-        <div class="ind-row"><span>OBV acumulado</span>
-          <span>${d.obv !== null && d.obv !== undefined ? (Math.abs(d.obv) >= 1e6 ? (d.obv/1e6).toFixed(1)+'M' : (d.obv/1e3).toFixed(0)+'K') : '—'}</span></div>
-        <div style="margin-top:8px"><span class="sig ${obvCls}">${obvLbl2}</span></div>
+        <div class="ind-lbl">ROC (12) · Momentum</div>
+        <div class="ind-big" style="color:${d.roc>0?'var(--green)':d.roc<0?'var(--red)':'var(--blue)'}">${d.roc!==null?(d.roc>0?'+':'')+f2(d.roc)+'%':'—'}</div>
+        <div class="ind-row"><span>Variación vs. 12 ruedas atrás</span><span></span></div>
+        <div style="margin-top:8px"><span class="sig ${rocCls}">${rocLbl}</span></div>
       </div>
 
       <div class="ind">
-        <div class="ind-lbl">Divergencia RSI / Precio</div>
-        <div class="ind-row"><span>RSI actual</span><span>${d.rsi ?? '—'}</span></div>
-        <div class="ind-row"><span>Ventana analizada</span><span>últimos 40 días</span></div>
-        <div style="margin-top:8px"><span class="sig ${divCls}">${divLbl}</span></div>
+        <div class="ind-lbl">Volumen relativo</div>
+        <div class="ind-big" style="color:${volSpike?(up?'var(--green)':'var(--red)'):'var(--blue)'}">${d.vol_rel!==null?f2(d.vol_rel)+'×':'—'}</div>
+        <div class="ind-row"><span>Volumen hoy</span><span>${fmtVol}</span></div>
+        <div class="ind-row"><span>vs. promedio 20 ruedas</span><span></span></div>
+        <div style="margin-top:8px"><span class="sig ${volCls}">${volLbl}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">Posición 52 semanas</div>
+        <div class="ind-row"><span>Desde el máximo</span>
+          <span style="color:var(--red)">${d.pct_from_52w_high!==null?f2(d.pct_from_52w_high)+'%':'—'}</span></div>
+        <div class="ind-row"><span>Desde el mínimo</span>
+          <span style="color:var(--green)">${d.pct_from_52w_low!==null?'+'+f2(d.pct_from_52w_low)+'%':'—'}</span></div>
+        <div class="ind-row"><span>Máx. / Mín. 52s</span><span>$${f2(d.high_52w)} / $${f2(d.low_52w)}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">Beta vs. SPY (S&amp;P 500)</div>
+        <div class="ind-big" style="color:var(--blue)">${d.beta ?? '—'}</div>
+        <div class="ind-row"><span>Referencia</span><span>SPY = 1.00</span></div>
+        <div style="margin-top:8px"><span class="sig ${betaCls}">${betaLbl}</span></div>
       </div>
 
     </div>
@@ -719,13 +764,7 @@ function renderDetail(sym) {
           callbacks: {
             title: items => {
               const raw = items[0]?.label || '';
-              // Parseamos año/mes/día a mano: new Date("YYYY-MM-DD") interpreta
-              // la fecha como medianoche UTC, y toLocaleDateString la vuelve a
-              // convertir a horario local (UTC-3 en Argentina), corriendo la
-              // fecha mostrada un día hacia atrás. Construyendo el Date con
-              // (año, mes, día) en horario local evitamos ese corrimiento.
-              const [y, m, day] = raw.split('-').map(Number);
-              const dt = new Date(y, m - 1, day);
+              const dt  = new Date(raw);
               return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
             },
             label: item => {
@@ -742,187 +781,7 @@ function renderDetail(sym) {
           grid:  { display: false }
         },
         y: {
-          ticks: { font:{size:10}, color:'#c9d1d9', callback: v => '$ '+v.toFixed(0) },
-          grid:  { color:'rgba(255,255,255,0.07)' }
-        }
-      }
-    }
-  });
-}
-
-// ── Ratio entre dos activos ─────────────────────────────────────────────────────
-let ratioChart = null;
-
-function buildRatioSelects() {
-  const symbols = Object.values(MARKET)
-    .map(d => ({ sym: d.symbol, name: d.name }))
-    .sort((a, b) => a.sym.localeCompare(b.sym));
-
-  const selA = document.getElementById('ratio-a');
-  const selB = document.getElementById('ratio-b');
-  const opts = symbols.map(s => `<option value="${s.sym}">${s.sym} · ${s.name}</option>`).join('');
-  selA.innerHTML = opts;
-  selB.innerHTML = opts;
-
-  // Default: los dos primeros tickers distintos (alfabéticamente)
-  if (symbols.length > 1) {
-    selA.value = symbols[0].sym;
-    selB.value = symbols[1].sym;
-  }
-}
-
-function swapRatio() {
-  const selA = document.getElementById('ratio-a');
-  const selB = document.getElementById('ratio-b');
-  const tmp = selA.value;
-  selA.value = selB.value;
-  selB.value = tmp;
-  renderRatio();
-}
-
-function renderRatio() {
-  const selA = document.getElementById('ratio-a');
-  const selB = document.getElementById('ratio-b');
-  if (!selA || !selA.value || !selB.value) return;
-
-  const symA = selA.value, symB = selB.value;
-  const dA = MARKET[symA], dB = MARKET[symB];
-  const panel = document.getElementById('ratio-panel');
-  if (!dA || !dB) { panel.innerHTML = ''; return; }
-
-  if (symA === symB) {
-    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">Elegí dos activos distintos para comparar.</p>';
-    return;
-  }
-
-  // Alineamos por fecha (intersección), por si algún ticker tiene menos historial
-  const mapA = {}, mapB = {};
-  (dA.hist_dates || []).forEach((dt, i) => mapA[dt] = dA.hist_prices[i]);
-  (dB.hist_dates || []).forEach((dt, i) => mapB[dt] = dB.hist_prices[i]);
-  const dates = Object.keys(mapA).filter(dt => dt in mapB).sort();
-
-  if (dates.length < 2) {
-    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">No hay suficiente historial compartido entre estos dos activos.</p>';
-    return;
-  }
-
-  const ratios = dates.map(dt => mapA[dt] / mapB[dt]);
-  const current = ratios[ratios.length - 1];
-  const first   = ratios[0];
-  const max     = Math.max(...ratios);
-  const min     = Math.min(...ratios);
-  const avg     = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-  const chgPct  = ((current - first) / first) * 100;
-  const vsAvgPct = ((current - avg) / avg) * 100;
-  const up = chgPct > 0, dn = chgPct < 0;
-  const cls = up ? 'up' : dn ? 'dn' : 'flat';
-  const sign = up ? '+' : '';
-
-  panel.innerHTML = `
-    <div class="detail" style="margin-bottom:1.5rem">
-      <div class="d-head">
-        <div>
-          <div class="d-sym">${symA} / ${symB}</div>
-          <div class="d-name">${dA.name} respecto de ${dB.name}</div>
-        </div>
-        <div class="d-price">
-          <div class="d-usd">${f4(current)}
-            <span style="font-size:.95rem;color:${up?'var(--green)':dn?'var(--red)':'var(--text2)'}">${sign}${f2(chgPct)}%</span>
-          </div>
-          <div class="d-ars">últimos ${dates.length} días</div>
-        </div>
-      </div>
-
-      <div class="stats">
-        <div class="stat"><div class="stat-lbl">Ratio actual</div>
-          <div class="stat-val">${f4(current)}</div></div>
-        <div class="stat"><div class="stat-lbl">Máx. del período</div>
-          <div class="stat-val">${f4(max)}</div></div>
-        <div class="stat"><div class="stat-lbl">Mín. del período</div>
-          <div class="stat-val">${f4(min)}</div></div>
-        <div class="stat"><div class="stat-lbl">Promedio período</div>
-          <div class="stat-val">${f4(avg)}</div></div>
-        <div class="stat"><div class="stat-lbl">Vs. promedio</div>
-          <div class="stat-val" style="color:${vsAvgPct>0?'var(--green)':'var(--red)'}">${vsAvgPct>0?'+':''}${f2(vsAvgPct)}%</div></div>
-        <div class="stat"><div class="stat-lbl">${symA}</div>
-          <div class="stat-val">USD ${f2(dA.price_usd)}</div></div>
-        <div class="stat"><div class="stat-lbl">${symB}</div>
-          <div class="stat-val">USD ${f2(dB.price_usd)}</div></div>
-      </div>
-
-      <div class="chart-section">
-        <div class="section-lbl">Ratio ${symA} / ${symB} · últimos ${dates.length} días</div>
-        <div class="chart-wrap"><canvas id="rchart"></canvas></div>
-      </div>
-      <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
-        Ratio = precio ${symA} (USD) ÷ precio ${symB} (USD). Al ser ambos CEDEARs valuados en USD,
-        el tipo de cambio se cancela y el ratio refleja la fuerza relativa de un activo contra el otro.
-      </p>
-    </div>
-  `;
-
-  const ctx = document.getElementById('rchart').getContext('2d');
-  if (ratioChart) ratioChart.destroy();
-  const isUp = ratios[ratios.length-1] >= ratios[0];
-  const lc = isUp ? '#3fb950' : '#f85149';
-
-  ratioChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: dates,
-      datasets: [{
-        label: `${symA}/${symB}`,
-        data: ratios,
-        borderColor: lc,
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        pointHoverBackgroundColor: lc,
-        pointHoverBorderColor: '#fff',
-        pointHoverBorderWidth: 2,
-        tension: 0.3,
-        fill: true,
-        backgroundColor: ctx2 => {
-          const g = ctx2.chart.ctx.createLinearGradient(0,0,0,180);
-          g.addColorStop(0, isUp ? 'rgba(63,185,80,.22)' : 'rgba(248,81,73,.22)');
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          return g;
-        }
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-          backgroundColor: '#1c2128',
-          borderColor: 'rgba(255,255,255,0.15)',
-          borderWidth: 1,
-          titleColor: '#e6edf3',
-          bodyColor: '#c9d1d9',
-          padding: 10,
-          callbacks: {
-            title: items => {
-              const raw = items[0]?.label || '';
-              const [y, m, day] = raw.split('-').map(Number);
-              const dt = new Date(y, m - 1, day);
-              return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
-            },
-            label: item => '  Ratio:  ' + Number(item.parsed.y).toFixed(4)
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { maxTicksLimit: 7, font:{size:10}, color:'#c9d1d9' },
-          grid:  { display: false }
-        },
-        y: {
-          ticks: { font:{size:10}, color:'#c9d1d9', callback: v => Number(v).toFixed(2) },
+          ticks: { font:{size:10}, color:'#c9d1d9', callback: v => '$ '+v.toFixed(1) },
           grid:  { color:'rgba(255,255,255,0.07)' }
         }
       }
@@ -933,6 +792,9 @@ function renderRatio() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '—';
 const f4 = v => (v !== null && v !== undefined) ? Number(v).toFixed(4) : '—';
+// TradingView usa '.' para clases de acciones (ej. BRK.B) donde Yahoo Finance usa '-' (BRK-B)
+const tvSymbol = sym => sym.replace('-', '.');
+const tvUrl    = sym => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(sym))}`;
 
 // ── Vista switching ───────────────────────────────────────────────────────────
 let currentView  = 'grid';
@@ -942,12 +804,9 @@ function switchView(view) {
   currentView = view;
   document.getElementById('view-grid').style.display    = view === 'grid'    ? '' : 'none';
   document.getElementById('view-signals').style.display = view === 'signals' ? '' : 'none';
-  document.getElementById('view-ratio').style.display   = view === 'ratio'   ? '' : 'none';
   document.getElementById('vnav-grid').classList.toggle('active',    view === 'grid');
   document.getElementById('vnav-signals').classList.toggle('active', view === 'signals');
-  document.getElementById('vnav-ratio').classList.toggle('active',   view === 'ratio');
   if (view === 'signals') renderSignals();
-  if (view === 'ratio')   renderRatio();
 }
 
 // ── Score técnico ─────────────────────────────────────────────────────────────
@@ -966,15 +825,6 @@ function scoreOf(d) {
   if (d.adx !== null && d.adx >= 25) {
     if (d.pdi > d.ndi) buy++; else sell++;
   }
-  // Cruce de medias: un cruce reciente pesa el doble que el estado ya vigente
-  if (d.ma_cross_event === 'golden_cross') buy += 2;
-  else if (d.ma_cross_event === 'death_cross') sell += 2;
-  // OBV: confirmación o divergencia de volumen
-  if (d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista') buy++;
-  else if (d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista') sell++;
-  // Divergencia RSI vs. precio
-  if (d.divergence === 'alcista') buy++;
-  else if (d.divergence === 'bajista') sell++;
   return { buy, sell, total: buy - sell };
 }
 
@@ -1022,12 +872,6 @@ function renderSignals() {
                        sell: !!(d.bb_upper && d.price_usd > d.bb_upper) },
       { label:'ADX',  buy:  !!(d.adx !== null && d.adx >= 25 && d.pdi > d.ndi),
                        sell: !!(d.adx !== null && d.adx >= 25 && d.ndi > d.pdi) },
-      { label:'Cruce', buy:  d.ma_cross_event === 'golden_cross',
-                        sell: d.ma_cross_event === 'death_cross' },
-      { label:'OBV',   buy:  d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista',
-                        sell: d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista' },
-      { label:'Div',   buy:  d.divergence === 'alcista',
-                        sell: d.divergence === 'bajista' },
     ];
     const dots = indicators.map(i => {
       const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
@@ -1069,7 +913,7 @@ function renderSignals() {
       <thead><tr>
         <th>Ticker</th><th>Precio</th><th>Var %</th>
         <th>RSI</th><th>MACD</th><th>ADX</th>
-        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX · Cruce · OBV · Div)</span></th>
+        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX)</span></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
