@@ -10,7 +10,7 @@
 :root{
   --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#2d333b;
   --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
-  --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
+  --text:#e6edf3;--text2:#9ea7b3;--text3:#7d8590;
   --blue:#58a6ff;--blue2:rgba(88,166,255,0.12);
   --green:#3fb950;--green2:rgba(63,185,80,0.12);
   --red:#f85149;--red2:rgba(248,81,73,0.12);
@@ -18,7 +18,7 @@
   --purple:#bc8cff;--purple2:rgba(188,140,255,0.12);
   --radius:8px;--radius-lg:12px;
 }
-html{font-size:14px;font-family:'Inter',system-ui,sans-serif}
+html{font-size:14px;font-family:'Inter',system-ui,sans-serif;font-weight:500}
 body{background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ── Layout ── */
@@ -122,6 +122,17 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .stab.active{background:var(--green2);border-color:rgba(63,185,80,.4);color:var(--green);font-weight:500}
 .stab.active-sell{background:var(--red2);border-color:rgba(248,81,73,.4);color:var(--red);font-weight:500}
 
+/* ── Screener ── */
+.screener-wrap{margin-bottom:1.5rem}
+.screener-help{color:var(--text2);font-size:.82rem;margin-bottom:12px}
+.screener-selects{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.screener-selects select{flex:1 1 220px;min-width:200px;
+  background:var(--bg2);border:1px solid var(--border2);color:var(--text);
+  border-radius:var(--radius);padding:6px 10px;font-size:.8rem;outline:none}
+.screener-selects select:focus{border-color:var(--blue)}
+.screener-selects select option{background:var(--bg2)}
+.screener-count{color:var(--text2);font-size:.82rem;margin:4px 0 14px}
+
 /* ── Panel detalle ── */
 .detail{background:var(--bg2);border:1px solid var(--border);
          border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.5rem}
@@ -137,7 +148,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));
         gap:7px;margin-bottom:1.1rem}
 .stat{background:var(--bg3);border-radius:var(--radius);padding:9px 11px}
-.stat-lbl{font-size:.65rem;color:#8b949e;text-transform:uppercase;
+.stat-lbl{font-size:.65rem;color:var(--text2);text-transform:uppercase;
            letter-spacing:.05em;margin-bottom:3px}
 .stat-val{font-size:.9rem;font-weight:600;color:#e6edf3}
 
@@ -233,8 +244,9 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 
   <!-- Navegación de vistas -->
   <div class="view-nav">
-    <button class="vnav active" id="vnav-grid"    onclick="switchView('grid')">📊 Dashboard</button>
-    <button class="vnav"        id="vnav-signals" onclick="switchView('signals')">🎯 Señales</button>
+    <button class="vnav active" id="vnav-grid"     onclick="switchView('grid')">📊 Dashboard</button>
+    <button class="vnav"        id="vnav-signals"  onclick="switchView('signals')">🎯 Señales</button>
+    <button class="vnav"        id="vnav-screener" onclick="switchView('screener')">🔍 Screener</button>
   </div>
 
   <div id="view-grid">
@@ -257,6 +269,22 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <div id="signals-table-wrap"></div>
     </div>
   </div>
+
+  <div id="view-screener" style="display:none">
+    <div class="screener-wrap">
+      <p class="screener-help">
+        Combiná hasta 3 condiciones — un ticker aparece en los resultados solo si las cumple <strong>todas</strong>.
+      </p>
+      <div class="screener-selects">
+        <select id="scr-1" onchange="applyScreener()"></select>
+        <select id="scr-2" onchange="applyScreener()"></select>
+        <select id="scr-3" onchange="applyScreener()"></select>
+      </div>
+      <div id="screener-count" class="screener-count"></div>
+      <div class="ticker-grid" id="screener-grid"></div>
+    </div>
+  </div>
+
 
   <footer class="footer">
     Datos: <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> via yfinance ·
@@ -284,6 +312,7 @@ const DATA_URL = 'data/market_data.json';
 
 // ── Arranque ──────────────────────────────────────────────────────────────────
 async function boot() {
+  populateScreenerSelects();
   await loadCCL();
   await loadMarket();
 }
@@ -404,7 +433,12 @@ function applyFilters() {
 
   const grid = document.getElementById('ticker-grid');
   grid.innerHTML = '';
-  items.forEach(d => {
+  items.forEach(d => grid.appendChild(buildTickerCard(d)));
+}
+
+// Construye el elemento DOM de una tarjeta de ticker. Se reutiliza en la
+// grilla principal y en los resultados del Screener.
+function buildTickerCard(d) {
     const up   = d.change_pct > 0, dn = d.change_pct < 0;
     const cls  = up ? 'up' : dn ? 'dn' : 'flat';
     const sign = up ? '+' : '';
@@ -429,6 +463,14 @@ function applyFilters() {
       badges.push('<span class="badge badge-buy">BB inf.</span>');
     if (d.bb_upper && d.price_usd > d.bb_upper)
       badges.push('<span class="badge badge-sell">BB sup.</span>');
+    if (d.ma_cross_event === 'golden_cross')
+      badges.push('<span class="badge badge-buy">Golden Cross</span>');
+    if (d.ma_cross_event === 'death_cross')
+      badges.push('<span class="badge badge-sell">Death Cross</span>');
+    if (d.divergence === 'alcista')
+      badges.push('<span class="badge badge-buy">Div. ▲</span>');
+    if (d.divergence === 'bajista')
+      badges.push('<span class="badge badge-sell">Div. ▼</span>');
 
     // Color de fondo según score técnico combinado
     const score = scoreOf(d);
@@ -454,8 +496,7 @@ function applyFilters() {
       ${badges.length ? '<div class="tc-badges">' + badges.join('') + '</div>' : ''}
     `;
     el.onclick = () => selectTicker(d.symbol);
-    grid.appendChild(el);
-  });
+    return el;
 }
 
 // ── Detalle ───────────────────────────────────────────────────────────────────
@@ -532,6 +573,31 @@ function renderDetail(sym) {
   const [betaCls, betaLbl] = d.beta === null ? ['sig-neutral','Sin datos'] :
                               d.beta > 1.2    ? ['sig-neutral','Más volátil que el mercado'] :
                               d.beta < 0.8    ? ['sig-neutral','Menos volátil (defensiva)']  : ['sig-neutral','Similar al mercado'];
+
+  // Cruce de medias (Golden/Death Cross)
+  const crossLblMap = { golden_cross: 'Golden Cross reciente', death_cross: 'Death Cross reciente' };
+  const [crossCls, crossLbl2] =
+    d.ma_cross_event === 'golden_cross' ? ['sig-buy',  crossLblMap.golden_cross] :
+    d.ma_cross_event === 'death_cross'  ? ['sig-sell', crossLblMap.death_cross]  :
+    d.ma_cross_status === 'alcista'     ? ['sig-neutral', 'MA50 > MA200 (alcista)'] :
+    d.ma_cross_status === 'bajista'     ? ['sig-neutral', 'MA50 < MA200 (bajista)'] :
+                                           ['sig-neutral', 'Sin datos (necesita 200+ ruedas)'];
+
+  // OBV (volumen)
+  const obvLblMap = {
+    confirma_suba:       ['sig-buy',  'Volumen confirma la suba'],
+    confirma_baja:       ['sig-sell', 'Volumen confirma la baja'],
+    divergencia_alcista: ['sig-buy',  'Divergencia alcista (acumulación)'],
+    divergencia_bajista: ['sig-sell', 'Divergencia bajista (distribución)'],
+    neutral:             ['sig-neutral', 'Neutral'],
+  };
+  const [obvCls, obvLbl2] = obvLblMap[d.obv_signal] || ['sig-neutral', 'Sin datos'];
+
+  // Divergencia RSI vs. precio
+  const [divCls, divLbl] =
+    d.divergence === 'alcista' ? ['sig-buy',  'Divergencia alcista (RSI)'] :
+    d.divergence === 'bajista' ? ['sig-sell', 'Divergencia bajista (RSI)'] :
+                                  ['sig-neutral', 'Sin divergencia'];
 
   const secLbl = SECTOR_LABEL[d.sector] || d.sector;
 
@@ -671,6 +737,28 @@ function renderDetail(sym) {
         <div style="margin-top:8px"><span class="sig ${betaCls}">${betaLbl}</span></div>
       </div>
 
+      <div class="ind">
+        <div class="ind-lbl">Cruce de medias (50/200)</div>
+        <div class="ind-row"><span>MA 50</span><span>${d.ma50 ? '$'+f2(d.ma50) : '—'}</span></div>
+        <div class="ind-row"><span>MA 200</span><span>${d.ma200 ? '$'+f2(d.ma200) : '—'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${crossCls}">${crossLbl2}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">OBV (Volumen)</div>
+        <div class="ind-row"><span>Volumen del día</span><span>${fmtVol}</span></div>
+        <div class="ind-row"><span>OBV acumulado</span>
+          <span>${d.obv !== null && d.obv !== undefined ? (Math.abs(d.obv) >= 1e6 ? (d.obv/1e6).toFixed(1)+'M' : (d.obv/1e3).toFixed(0)+'K') : '—'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${obvCls}">${obvLbl2}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">Divergencia RSI / Precio</div>
+        <div class="ind-row"><span>RSI actual</span><span>${d.rsi ?? '—'}</span></div>
+        <div class="ind-row"><span>Ventana analizada</span><span>últimos 40 días</span></div>
+        <div style="margin-top:8px"><span class="sig ${divCls}">${divLbl}</span></div>
+      </div>
+
     </div>
   `;
 
@@ -764,7 +852,13 @@ function renderDetail(sym) {
           callbacks: {
             title: items => {
               const raw = items[0]?.label || '';
-              const dt  = new Date(raw);
+              // Parseamos año/mes/día a mano: new Date("YYYY-MM-DD") interpreta
+              // la fecha como medianoche UTC, y toLocaleDateString la vuelve a
+              // convertir a horario local (UTC-3 en Argentina), corriendo la
+              // fecha mostrada un día hacia atrás. Construyendo el Date con
+              // (año, mes, día) en horario local evitamos ese corrimiento.
+              const [y, m, day] = raw.split('-').map(Number);
+              const dt = new Date(y, m - 1, day);
               return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
             },
             label: item => {
@@ -802,11 +896,120 @@ let signalFilter = 'buy';
 
 function switchView(view) {
   currentView = view;
-  document.getElementById('view-grid').style.display    = view === 'grid'    ? '' : 'none';
-  document.getElementById('view-signals').style.display = view === 'signals' ? '' : 'none';
-  document.getElementById('vnav-grid').classList.toggle('active',    view === 'grid');
-  document.getElementById('vnav-signals').classList.toggle('active', view === 'signals');
-  if (view === 'signals') renderSignals();
+  document.getElementById('view-grid').style.display     = view === 'grid'     ? '' : 'none';
+  document.getElementById('view-signals').style.display  = view === 'signals'  ? '' : 'none';
+  document.getElementById('view-screener').style.display  = view === 'screener' ? '' : 'none';
+  document.getElementById('vnav-grid').classList.toggle('active',     view === 'grid');
+  document.getElementById('vnav-signals').classList.toggle('active',  view === 'signals');
+  document.getElementById('vnav-screener').classList.toggle('active', view === 'screener');
+  if (view === 'signals')  renderSignals();
+  if (view === 'screener') applyScreener();
+}
+
+// ── Screener: 3 condiciones combinables (AND) ──────────────────────────────────
+const SCREENER_CONDITIONS = {
+  rsi_oversold:     { group:'Momentum',   label:'RSI en sobreventa (≤30)',
+                       test: d => d.rsi !== null && d.rsi <= 30 },
+  rsi_overbought:   { group:'Momentum',   label:'RSI en sobrecompra (≥70)',
+                       test: d => d.rsi !== null && d.rsi >= 70 },
+  stoch_oversold:   { group:'Momentum',   label:'Estocástico en sobreventa (≤20)',
+                       test: d => d.stoch_k !== null && d.stoch_k <= 20 },
+  stoch_overbought: { group:'Momentum',   label:'Estocástico en sobrecompra (≥80)',
+                       test: d => d.stoch_k !== null && d.stoch_k >= 80 },
+  roc_positive:     { group:'Momentum',   label:'ROC positivo (momentum +)',
+                       test: d => d.roc !== null && d.roc > 0 },
+  roc_negative:     { group:'Momentum',   label:'ROC negativo (momentum −)',
+                       test: d => d.roc !== null && d.roc < 0 },
+
+  macd_bull:        { group:'Tendencia',  label:'MACD alcista (MACD > señal)',
+                       test: d => d.macd !== null && d.macd_signal !== null && d.macd > d.macd_signal },
+  macd_bear:        { group:'Tendencia',  label:'MACD bajista (MACD ≤ señal)',
+                       test: d => d.macd !== null && d.macd_signal !== null && d.macd <= d.macd_signal },
+  above_all_mas:    { group:'Tendencia',  label:'Precio sobre MA20, 50 y 200',
+                       test: d => [d.ma20,d.ma50,d.ma200].filter(m=>m&&d.price_usd>m).length===3 },
+  below_all_mas:    { group:'Tendencia',  label:'Precio bajo MA20, 50 y 200',
+                       test: d => [d.ma20,d.ma50,d.ma200].filter(m=>m&&d.price_usd>m).length===0 },
+  golden_cross:     { group:'Tendencia',  label:'Golden Cross reciente',
+                       test: d => d.ma_cross_event === 'golden_cross' },
+  death_cross:      { group:'Tendencia',  label:'Death Cross reciente',
+                       test: d => d.ma_cross_event === 'death_cross' },
+  adx_strong_bull:  { group:'Tendencia',  label:'ADX ≥25 con tendencia alcista',
+                       test: d => d.adx !== null && d.adx >= 25 && d.pdi > d.ndi },
+  adx_strong_bear:  { group:'Tendencia',  label:'ADX ≥25 con tendencia bajista',
+                       test: d => d.adx !== null && d.adx >= 25 && d.ndi > d.pdi },
+  adx_lateral:      { group:'Tendencia',  label:'ADX <20 (sin tendencia clara)',
+                       test: d => d.adx !== null && d.adx < 20 },
+
+  bb_lower:         { group:'Volatilidad', label:'Precio bajo banda inferior de Bollinger',
+                       test: d => !!(d.bb_lower && d.price_usd < d.bb_lower) },
+  bb_upper:         { group:'Volatilidad', label:'Precio sobre banda superior de Bollinger',
+                       test: d => !!(d.bb_upper && d.price_usd > d.bb_upper) },
+  beta_high:        { group:'Volatilidad', label:'Beta alta (>1.2, más volátil que el mercado)',
+                       test: d => d.beta !== null && d.beta > 1.2 },
+  beta_low:         { group:'Volatilidad', label:'Beta baja (<0.8, más defensiva)',
+                       test: d => d.beta !== null && d.beta < 0.8 },
+
+  vol_spike:        { group:'Volumen',    label:'Pico de volumen (≥2× el promedio)',
+                       test: d => d.vol_rel !== null && d.vol_rel >= 2 },
+  obv_bull:         { group:'Volumen',    label:'OBV confirma o anticipa suba',
+                       test: d => d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista' },
+  obv_bear:         { group:'Volumen',    label:'OBV confirma o anticipa baja',
+                       test: d => d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista' },
+
+  div_bull:         { group:'Divergencias', label:'Divergencia alcista (RSI vs. precio)',
+                       test: d => d.divergence === 'alcista' },
+  div_bear:         { group:'Divergencias', label:'Divergencia bajista (RSI vs. precio)',
+                       test: d => d.divergence === 'bajista' },
+
+  near_52w_high:    { group:'Rango 52 semanas', label:'A menos de 5% del máximo de 52 semanas',
+                       test: d => d.pct_from_52w_high !== null && d.pct_from_52w_high >= -5 },
+  near_52w_low:     { group:'Rango 52 semanas', label:'A menos de 5% del mínimo de 52 semanas',
+                       test: d => d.pct_from_52w_low !== null && d.pct_from_52w_low <= 5 },
+};
+
+function populateScreenerSelects() {
+  const groups = {};
+  Object.entries(SCREENER_CONDITIONS).forEach(([key, c]) => {
+    if (!groups[c.group]) groups[c.group] = [];
+    groups[c.group].push([key, c.label]);
+  });
+  const optionsHTML = '<option value="">— Sin condición —</option>' +
+    Object.entries(groups).map(([g, opts]) =>
+      `<optgroup label="${g}">` +
+      opts.map(([k, l]) => `<option value="${k}">${l}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
+  ['scr-1', 'scr-2', 'scr-3'].forEach(id => {
+    document.getElementById(id).innerHTML = optionsHTML;
+  });
+}
+
+function applyScreener() {
+  const keys = ['scr-1', 'scr-2', 'scr-3']
+    .map(id => document.getElementById(id).value)
+    .filter(Boolean);
+
+  const grid    = document.getElementById('screener-grid');
+  const countEl = document.getElementById('screener-count');
+
+  if (!Object.keys(MARKET).length) {
+    countEl.textContent = 'Todavía no se cargaron los datos de mercado.';
+    grid.innerHTML = '';
+    return;
+  }
+
+  const items = Object.values(MARKET).filter(d =>
+    keys.every(k => SCREENER_CONDITIONS[k].test(d))
+  );
+
+  countEl.textContent = keys.length
+    ? `${items.length} ticker${items.length === 1 ? '' : 's'} cumplen ${keys.length === 1 ? 'la condición' : 'las ' + keys.length + ' condiciones'} elegida${keys.length === 1 ? '' : 's'}.`
+    : 'Elegí al menos una condición para empezar a filtrar.';
+
+  grid.innerHTML = '';
+  items
+    .sort((a, b) => scoreOf(b).total - scoreOf(a).total)
+    .forEach(d => grid.appendChild(buildTickerCard(d)));
 }
 
 // ── Score técnico ─────────────────────────────────────────────────────────────
@@ -825,6 +1028,15 @@ function scoreOf(d) {
   if (d.adx !== null && d.adx >= 25) {
     if (d.pdi > d.ndi) buy++; else sell++;
   }
+  // Cruce de medias: un cruce reciente pesa el doble que el estado ya vigente
+  if (d.ma_cross_event === 'golden_cross') buy += 2;
+  else if (d.ma_cross_event === 'death_cross') sell += 2;
+  // OBV: confirmación o divergencia de volumen
+  if (d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista') buy++;
+  else if (d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista') sell++;
+  // Divergencia RSI vs. precio
+  if (d.divergence === 'alcista') buy++;
+  else if (d.divergence === 'bajista') sell++;
   return { buy, sell, total: buy - sell };
 }
 
@@ -872,6 +1084,12 @@ function renderSignals() {
                        sell: !!(d.bb_upper && d.price_usd > d.bb_upper) },
       { label:'ADX',  buy:  !!(d.adx !== null && d.adx >= 25 && d.pdi > d.ndi),
                        sell: !!(d.adx !== null && d.adx >= 25 && d.ndi > d.pdi) },
+      { label:'Cruce', buy:  d.ma_cross_event === 'golden_cross',
+                        sell: d.ma_cross_event === 'death_cross' },
+      { label:'OBV',   buy:  d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista',
+                        sell: d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista' },
+      { label:'Div',   buy:  d.divergence === 'alcista',
+                        sell: d.divergence === 'bajista' },
     ];
     const dots = indicators.map(i => {
       const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
@@ -913,7 +1131,7 @@ function renderSignals() {
       <thead><tr>
         <th>Ticker</th><th>Precio</th><th>Var %</th>
         <th>RSI</th><th>MACD</th><th>ADX</th>
-        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX)</span></th>
+        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX · Cruce · OBV · Div)</span></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
