@@ -390,6 +390,14 @@ function applyFilters() {
       badges.push('<span class="badge badge-buy">BB inf.</span>');
     if (d.bb_upper && d.price_usd > d.bb_upper)
       badges.push('<span class="badge badge-sell">BB sup.</span>');
+    if (d.ma_cross_event === 'golden_cross')
+      badges.push('<span class="badge badge-buy">Golden Cross</span>');
+    if (d.ma_cross_event === 'death_cross')
+      badges.push('<span class="badge badge-sell">Death Cross</span>');
+    if (d.divergence === 'alcista')
+      badges.push('<span class="badge badge-buy">Div. ▲</span>');
+    if (d.divergence === 'bajista')
+      badges.push('<span class="badge badge-sell">Div. ▼</span>');
 
     // Color de fondo según score técnico combinado
     const score = scoreOf(d);
@@ -463,6 +471,31 @@ function renderDetail(sym) {
                 d.bb_lower && d.price_usd < d.bb_lower ? 'sig-buy'  : 'sig-neutral';
   const bbLbl = d.bb_upper && d.price_usd > d.bb_upper ? 'Sobre banda sup.' :
                 d.bb_lower && d.price_usd < d.bb_lower ? 'Bajo banda inf.'  : 'Dentro bandas';
+
+  // Cruce de medias (Golden/Death Cross)
+  const crossLbl = { golden_cross: 'Golden Cross reciente', death_cross: 'Death Cross reciente' };
+  const [crossCls, crossLbl2] =
+    d.ma_cross_event === 'golden_cross' ? ['sig-buy',  crossLbl.golden_cross] :
+    d.ma_cross_event === 'death_cross'  ? ['sig-sell', crossLbl.death_cross]  :
+    d.ma_cross_status === 'alcista'     ? ['sig-neutral', 'MA50 > MA200 (alcista)'] :
+    d.ma_cross_status === 'bajista'     ? ['sig-neutral', 'MA50 < MA200 (bajista)'] :
+                                           ['sig-neutral', 'Sin datos (necesita 200+ ruedas)'];
+
+  // OBV (volumen)
+  const obvLbl = {
+    confirma_suba:       ['sig-buy',  'Volumen confirma la suba'],
+    confirma_baja:       ['sig-sell', 'Volumen confirma la baja'],
+    divergencia_alcista: ['sig-buy',  'Divergencia alcista (acumulación)'],
+    divergencia_bajista: ['sig-sell', 'Divergencia bajista (distribución)'],
+    neutral:             ['sig-neutral', 'Neutral'],
+  };
+  const [obvCls, obvLbl2] = obvLbl[d.obv_signal] || ['sig-neutral', 'Sin datos'];
+
+  // Divergencia RSI vs. precio
+  const [divCls, divLbl] =
+    d.divergence === 'alcista' ? ['sig-buy',  'Divergencia alcista (RSI)'] :
+    d.divergence === 'bajista' ? ['sig-sell', 'Divergencia bajista (RSI)'] :
+                                  ['sig-neutral', 'Sin divergencia'];
 
   const secLbl = SECTOR_LABEL[d.sector] || d.sector;
 
@@ -559,6 +592,28 @@ function renderDetail(sym) {
         <div style="margin-top:8px"><span class="sig ${adxCls}">${adxLbl}</span></div>
       </div>
 
+      <div class="ind">
+        <div class="ind-lbl">Cruce de medias (50/200)</div>
+        <div class="ind-row"><span>MA 50</span><span>${d.ma50 ? '$'+f2(d.ma50) : '—'}</span></div>
+        <div class="ind-row"><span>MA 200</span><span>${d.ma200 ? '$'+f2(d.ma200) : '—'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${crossCls}">${crossLbl2}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">OBV (Volumen)</div>
+        <div class="ind-row"><span>Volumen del día</span><span>${fmtVol}</span></div>
+        <div class="ind-row"><span>OBV acumulado</span>
+          <span>${d.obv !== null && d.obv !== undefined ? (Math.abs(d.obv) >= 1e6 ? (d.obv/1e6).toFixed(1)+'M' : (d.obv/1e3).toFixed(0)+'K') : '—'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${obvCls}">${obvLbl2}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">Divergencia RSI / Precio</div>
+        <div class="ind-row"><span>RSI actual</span><span>${d.rsi ?? '—'}</span></div>
+        <div class="ind-row"><span>Ventana analizada</span><span>últimos 40 días</span></div>
+        <div style="margin-top:8px"><span class="sig ${divCls}">${divLbl}</span></div>
+      </div>
+
     </div>
   `;
 
@@ -652,7 +707,13 @@ function renderDetail(sym) {
           callbacks: {
             title: items => {
               const raw = items[0]?.label || '';
-              const dt  = new Date(raw);
+              // Parseamos año/mes/día a mano: new Date("YYYY-MM-DD") interpreta
+              // la fecha como medianoche UTC, y toLocaleDateString la vuelve a
+              // convertir a horario local (UTC-3 en Argentina), corriendo la
+              // fecha mostrada un día hacia atrás. Construyendo el Date con
+              // (año, mes, día) en horario local evitamos ese corrimiento.
+              const [y, m, day] = raw.split('-').map(Number);
+              const dt = new Date(y, m - 1, day);
               return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
             },
             label: item => {
@@ -710,6 +771,15 @@ function scoreOf(d) {
   if (d.adx !== null && d.adx >= 25) {
     if (d.pdi > d.ndi) buy++; else sell++;
   }
+  // Cruce de medias: un cruce reciente pesa el doble que el estado ya vigente
+  if (d.ma_cross_event === 'golden_cross') buy += 2;
+  else if (d.ma_cross_event === 'death_cross') sell += 2;
+  // OBV: confirmación o divergencia de volumen
+  if (d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista') buy++;
+  else if (d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista') sell++;
+  // Divergencia RSI vs. precio
+  if (d.divergence === 'alcista') buy++;
+  else if (d.divergence === 'bajista') sell++;
   return { buy, sell, total: buy - sell };
 }
 
@@ -757,6 +827,12 @@ function renderSignals() {
                        sell: !!(d.bb_upper && d.price_usd > d.bb_upper) },
       { label:'ADX',  buy:  !!(d.adx !== null && d.adx >= 25 && d.pdi > d.ndi),
                        sell: !!(d.adx !== null && d.adx >= 25 && d.ndi > d.pdi) },
+      { label:'Cruce', buy:  d.ma_cross_event === 'golden_cross',
+                        sell: d.ma_cross_event === 'death_cross' },
+      { label:'OBV',   buy:  d.obv_signal === 'confirma_suba' || d.obv_signal === 'divergencia_alcista',
+                        sell: d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista' },
+      { label:'Div',   buy:  d.divergence === 'alcista',
+                        sell: d.divergence === 'bajista' },
     ];
     const dots = indicators.map(i => {
       const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
@@ -798,7 +874,7 @@ function renderSignals() {
       <thead><tr>
         <th>Ticker</th><th>Precio</th><th>Var %</th>
         <th>RSI</th><th>MACD</th><th>ADX</th>
-        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX)</span></th>
+        <th>Score <span style="font-size:.6rem">(RSI · MACD · MAs · BB · ADX · Cruce · OBV · Div)</span></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
