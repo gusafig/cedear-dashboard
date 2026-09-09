@@ -627,8 +627,166 @@ def compute_adx(highs, lows, closes, period=14):
         ndi_list.append(ndi)
         dx_list.append(dx)
 
-    adx_s = wilder_smooth(dx_list, period)
-    return round(adx_s[-1], 2), round(pdi_list[-1], 2), round(ndi_list[-1], 2)
+    if len(dx_list) < period:
+        return None, round(pdi_list[-1], 2), round(ndi_list[-1], 2)
+
+    # ADX: a diferencia de TR/PDM/NDM (que se acumulan como suma cruda porque
+    # su cociente cancela el factor de escala), el DX ya está expresado en
+    # porcentaje (0-100). Acumularlo con wilder_smooth() lo trataría como una
+    # suma y lo infla muy por encima de 100 — acá se promedia correctamente.
+    adx = sum(dx_list[:period]) / period
+    for dx in dx_list[period:]:
+        adx = (adx * (period - 1) + dx) / period
+
+    return round(adx, 2), round(pdi_list[-1], 2), round(ndi_list[-1], 2)
+
+
+def compute_obv(closes, volumes, lookback=20):
+    """
+    On-Balance Volume + señal de confirmación/divergencia contra el precio.
+    Retorna (obv, obv_signal) donde obv_signal es uno de:
+    'confirma_suba', 'confirma_baja', 'divergencia_alcista', 'divergencia_bajista', 'neutral'.
+    """
+    if len(closes) < 2 or len(volumes) != len(closes):
+        return None, None
+
+    obv_series = [0.0]
+    for i in range(1, len(closes)):
+        if closes[i] > closes[i - 1]:
+            obv_series.append(obv_series[-1] + volumes[i])
+        elif closes[i] < closes[i - 1]:
+            obv_series.append(obv_series[-1] - volumes[i])
+        else:
+            obv_series.append(obv_series[-1])
+
+    obv = obv_series[-1]
+    if len(obv_series) <= lookback:
+        return round(obv, 0), None
+
+    obv_trend   = obv_series[-1] - obv_series[-1 - lookback]
+    price_trend = closes[-1] - closes[-1 - lookback]
+
+    if obv_trend > 0 and price_trend > 0:
+        signal = "confirma_suba"
+    elif obv_trend < 0 and price_trend < 0:
+        signal = "confirma_baja"
+    elif obv_trend <= 0 and price_trend > 0:
+        signal = "divergencia_bajista"
+    elif obv_trend >= 0 and price_trend < 0:
+        signal = "divergencia_alcista"
+    else:
+        signal = "neutral"
+
+    return round(obv, 0), signal
+
+
+def _sma_series(closes, period):
+    """Serie completa de SMA (rolling sum, O(n))."""
+    if len(closes) < period:
+        return []
+    series = []
+    window_sum = sum(closes[:period])
+    series.append(window_sum / period)
+    for i in range(period, len(closes)):
+        window_sum += closes[i] - closes[i - period]
+        series.append(window_sum / period)
+    return series
+
+
+def compute_ma_cross(closes, lookback=5):
+    """
+    Estado de tendencia (MA50 vs MA200) y detección de cruce reciente
+    (Golden Cross / Death Cross) dentro de los últimos `lookback` días.
+    Retorna (status, cross_event) — cross_event es None si no hubo cruce reciente.
+    """
+    if len(closes) < 200 + lookback + 1:
+        return None, None
+
+    ma50_s  = _sma_series(closes, 50)
+    ma200_s = _sma_series(closes, 200)
+    offset  = len(ma50_s) - len(ma200_s)
+    ma50_s  = ma50_s[offset:]
+
+    diffs  = [ma50_s[i] - ma200_s[i] for i in range(len(ma200_s))]
+    status = "alcista" if diffs[-1] > 0 else "bajista"
+
+    cross = None
+    recent_signs = [1 if v > 0 else -1 for v in diffs[-(lookback + 1):]]
+    if recent_signs[0] != recent_signs[-1]:
+        cross = "golden_cross" if recent_signs[-1] > 0 else "death_cross"
+
+    return status, cross
+
+
+def _rsi_series(closes, period=14):
+    """Serie completa de RSI (suavizado de Wilder), alineada al final de `closes`."""
+    if len(closes) < period + 1:
+        return []
+    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains  = [d if d > 0 else 0.0 for d in deltas]
+    losses = [-d if d < 0 else 0.0 for d in deltas]
+
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    def _rsi(ag, al):
+        if al == 0:
+            return 100.0
+        return 100 - (100 / (1 + ag / al))
+
+    series = [_rsi(avg_gain, avg_loss)]
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        series.append(_rsi(avg_gain, avg_loss))
+    return series
+
+
+def _find_local_extrema(series, order=3):
+    """Índices de mínimos y máximos locales (comparados contra `order` vecinos a cada lado)."""
+    mins, maxs = [], []
+    n = len(series)
+    for i in range(order, n - order):
+        window = series[i - order:i + order + 1]
+        if series[i] == min(window):
+            mins.append(i)
+        if series[i] == max(window):
+            maxs.append(i)
+    return mins, maxs
+
+
+def compute_divergence(closes, rsi_series, lookback=40, order=3):
+    """
+    Divergencia RSI vs. precio sobre los últimos `lookback` días.
+    'alcista': precio hace un mínimo más bajo mientras el RSI hace un mínimo más alto.
+    'bajista': precio hace un máximo más alto mientras el RSI hace un máximo más bajo.
+    """
+    if not rsi_series or len(rsi_series) < lookback:
+        return None
+
+    price_window = closes[-len(rsi_series):][-lookback:]
+    rsi_window   = rsi_series[-lookback:]
+
+    price_mins, price_maxs = _find_local_extrema(price_window, order)
+    rsi_mins,   rsi_maxs   = _find_local_extrema(rsi_window, order)
+
+    if len(price_mins) >= 2 and len(rsi_mins) >= 2:
+        p1, p2 = price_mins[-2], price_mins[-1]
+        if price_window[p2] < price_window[p1]:
+            r1 = min(rsi_mins, key=lambda i: abs(i - p1))
+            r2 = min(rsi_mins, key=lambda i: abs(i - p2))
+            if r2 > r1 and rsi_window[r2] > rsi_window[r1]:
+                return "alcista"
+
+    if len(price_maxs) >= 2 and len(rsi_maxs) >= 2:
+        p1, p2 = price_maxs[-2], price_maxs[-1]
+        if price_window[p2] > price_window[p1]:
+            r1 = min(rsi_maxs, key=lambda i: abs(i - p1))
+            r2 = min(rsi_maxs, key=lambda i: abs(i - p2))
+            if r2 > r1 and rsi_window[r2] < rsi_window[r1]:
+                return "bajista"
+
+    return None
 
 
 # ── Descarga robusta ticker a ticker ─────────────────────────────────────────
@@ -727,6 +885,10 @@ def fetch_all():
             roc                           = compute_roc(closes)
             vol_rel                       = compute_vol_rel(volumes)
             beta = compute_beta(df["Close"], spy_close) if (spy_close is not None and sym != "SPY") else (1.0 if sym == "SPY" else None)
+            obv, obv_signal               = compute_obv(closes, volumes)
+            ma_cross_status, ma_cross_event = compute_ma_cross(closes)
+            rsi_series                    = _rsi_series(closes)
+            divergence                    = compute_divergence(closes, rsi_series)
 
             results[sym] = {
                 "symbol":      sym,
@@ -760,11 +922,20 @@ def fetch_all():
                 "stoch_d":     stoch_d,
                 "roc":         roc,
                 "beta":        beta,
+                "obv":         obv,
+                "obv_signal":  obv_signal,
+                "ma_cross_status": ma_cross_status,
+                "ma_cross_event":  ma_cross_event,
+                "divergence":  divergence,
                 "hist_prices": hist_prices,
                 "hist_dates":  hist_dates,
             }
             ok += 1
-            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}  Beta {beta}")
+            extra = []
+            if ma_cross_event: extra.append(ma_cross_event)
+            if divergence:     extra.append(f"div_{divergence}")
+            extra_str = ("  " + " ".join(extra)) if extra else ""
+            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}  Beta {beta}{extra_str}")
 
         except Exception as e:
             print(f"  [ERR] {sym}: {e}")
