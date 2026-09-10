@@ -794,6 +794,54 @@ def download_ticker(sym, start_str, end_str, retries=3):
     return None
 
 
+def download_batch(symbols, start_str, end_str, retries=3):
+    """
+    Descarga varios tickers en una sola llamada a yfinance (mucho más rápido y
+    con menos requests que uno por uno). Devuelve {symbol: DataFrame|None}.
+    Reintenta el lote completo ante errores transitorios de red/API.
+    """
+    tickers_str = " ".join(symbols)
+    for attempt in range(retries):
+        try:
+            raw = yf.download(
+                tickers_str,
+                start=start_str,
+                end=end_str,
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+                threads=True,
+                group_by="ticker",
+            )
+            if raw is None or raw.empty:
+                print(f"    [RETRY {attempt+1}] lote vacío ({len(symbols)} tickers)")
+            else:
+                out = {}
+                is_multi = isinstance(raw.columns, pd.MultiIndex)
+                top_level = set(raw.columns.get_level_values(0)) if is_multi else None
+                for sym in symbols:
+                    try:
+                        if is_multi:
+                            df = raw[sym].dropna(subset=["Close"]) if sym in top_level else None
+                        else:
+                            # Lote de un solo ticker: columnas planas
+                            df = raw.dropna(subset=["Close"])
+                        out[sym] = df if (df is not None and len(df) > 10) else None
+                    except Exception:
+                        out[sym] = None
+                return out
+        except Exception as e:
+            print(f"    [RETRY {attempt+1}] lote: {e}")
+        if attempt < retries - 1:
+            time.sleep(10)
+    return {sym: None for sym in symbols}
+
+
+def chunked(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 # ── Proceso principal ─────────────────────────────────────────────────────────
 
 def fetch_all():
@@ -803,7 +851,25 @@ def fetch_all():
     end_str    = end_date.strftime("%Y-%m-%d")
 
     print(f"[{datetime.now().isoformat()}]")
-    print(f"Descargando {len(TICKERS)} tickers | {start_str} → {end_str}")
+    print(f"Descargando {len(TICKERS)} tickers en lotes | {start_str} → {end_str}")
+    print("-" * 60)
+
+    BATCH_SIZE = 40
+    raw_data = {}
+    batches = list(chunked(TICKERS, BATCH_SIZE))
+    for i, batch in enumerate(batches, 1):
+        print(f"  Lote {i}/{len(batches)} ({len(batch)} tickers)...")
+        raw_data.update(download_batch(batch, start_str, end_str))
+        time.sleep(1)  # pausa breve entre lotes
+
+    # Reintento individual (uno por uno) para los que fallaron en su lote
+    failed = [sym for sym in TICKERS if raw_data.get(sym) is None]
+    if failed:
+        print(f"  Reintentando {len(failed)} tickers de forma individual: {', '.join(failed)}")
+        for sym in failed:
+            raw_data[sym] = download_ticker(sym, start_str, end_str)
+            time.sleep(0.5)
+
     print("-" * 60)
 
     results = {}
@@ -811,7 +877,7 @@ def fetch_all():
     skip = 0
 
     for sym in TICKERS:
-        df = download_ticker(sym, start_str, end_str)
+        df = raw_data.get(sym)
 
         if df is None:
             print(f"  [SKIP] {sym}")
@@ -906,8 +972,6 @@ def fetch_all():
         except Exception as e:
             print(f"  [ERR] {sym}: {e}")
             skip += 1
-
-        time.sleep(0.5)   # pausa entre tickers para no saturar la API
 
     print("-" * 60)
     print(f"OK: {ok}  |  Skip/Error: {skip}  |  Total: {len(TICKERS)}")
