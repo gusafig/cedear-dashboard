@@ -83,6 +83,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
        text-decoration:none;padding:2px 5px;border-radius:6px;border:1px solid var(--border);
        background:var(--bg);opacity:.8;transition:all .15s;z-index:2}
 .tc-tv:hover{opacity:1;color:var(--blue);border-color:rgba(88,166,255,.4)}
+.tc-fav{position:absolute;top:8px;left:8px;font-size:.85rem;line-height:1;cursor:pointer;
+        opacity:.5;transition:all .15s;z-index:2;background:none;border:none;padding:2px;color:var(--text3)}
+.tc-fav:hover{opacity:1;transform:scale(1.15)}
+.tc-fav.active{opacity:1;color:#f0b400}
+.cmp-chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);
+  border:1px solid var(--border);border-radius:99px;padding:4px 6px 4px 12px;font-size:.8rem}
+.cmp-chip button{background:none;border:none;color:var(--text3);cursor:pointer;
+  font-size:.85rem;line-height:1;padding:2px 4px;border-radius:50%}
+.cmp-chip button:hover{color:var(--red);background:var(--red2)}
 
 /* ── Botón volver arriba ── */
 .back-to-top{position:fixed;bottom:22px;right:22px;width:42px;height:42px;border-radius:50%;
@@ -217,6 +226,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 
   <div class="controls">
     <input id="search" type="text" placeholder="Buscar ticker o empresa…" oninput="applyFilters()"/>
+    <button class="tab" id="fav-toggle" onclick="toggleFavOnly()">⭐ Favoritos</button>
     <select id="sort-sel" onchange="applyFilters()">
       <option value="sym">A – Z</option>
       <option value="pct_desc">Mayor variación +</option>
@@ -246,6 +256,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
     <button class="vnav"        id="vnav-signals"  onclick="switchView('signals')">🎯 Señales</button>
     <button class="vnav"        id="vnav-screener" onclick="switchView('screener')">🔍 Screener</button>
     <button class="vnav"        id="vnav-ratio"    onclick="switchView('ratio')">📐 Ratio</button>
+    <button class="vnav"        id="vnav-compare"  onclick="switchView('compare')">🔀 Comparador</button>
   </div>
 
   <div id="view-grid">
@@ -280,6 +291,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
         <select id="scr-3" onchange="applyScreener()"></select>
       </div>
       <div id="screener-count" class="screener-count"></div>
+      <button class="tab" id="scr-export" onclick="exportScreenerCSV()" style="margin-bottom:10px">⬇ Exportar CSV</button>
       <div class="ticker-grid" id="screener-grid"></div>
     </div>
   </div>
@@ -292,6 +304,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <button class="tab" onclick="swapRatio()" style="flex:0 0 auto">⇄ Invertir</button>
     </div>
     <div id="ratio-panel"></div>
+  </div>
+
+  <div id="view-compare" style="display:none">
+    <div class="screener-selects" style="align-items:center">
+      <select id="cmp-add"></select>
+      <button class="tab" onclick="addCompare()" style="flex:0 0 auto">+ Agregar</button>
+    </div>
+    <div id="cmp-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
+    <div id="cmp-panel"></div>
   </div>
 
 
@@ -309,6 +330,29 @@ let SEL    = null;
 let SECTOR = '';
 let CCL    = 1050;
 let chart  = null;
+let FAV_ONLY = false;
+let SCREENER_RESULTS = [];
+
+const FAVORITES_KEY = 'cedear_favorites';
+let FAVORITES = new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'));
+
+function toggleFavorite(sym, event) {
+  if (event) event.stopPropagation();
+  if (FAVORITES.has(sym)) FAVORITES.delete(sym);
+  else FAVORITES.add(sym);
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...FAVORITES]));
+  const favBtn = document.getElementById('fav-toggle');
+  if (favBtn) favBtn.textContent = `⭐ Favoritos (${FAVORITES.size})`;
+  if (currentView === 'grid')       applyFilters();
+  else if (currentView === 'screener') applyScreener();
+  if (SEL === sym) renderDetail(sym);
+}
+
+function toggleFavOnly() {
+  FAV_ONLY = !FAV_ONLY;
+  document.getElementById('fav-toggle').classList.toggle('active', FAV_ONLY);
+  applyFilters();
+}
 
 const SECTOR_LABEL = {
   '':'Todos', tech:'Tecnología', finance:'Finanzas', energy:'Energía',
@@ -322,6 +366,7 @@ const DATA_URL = 'data/market_data.json';
 // ── Arranque ──────────────────────────────────────────────────────────────────
 async function boot() {
   populateScreenerSelects();
+  document.getElementById('fav-toggle').textContent = `⭐ Favoritos (${FAVORITES.size})`;
   await loadCCL();
   await loadMarket();
 }
@@ -360,6 +405,7 @@ async function loadMarket() {
     buildTabs();
     buildSectorSelect();
     buildRatioSelects();
+    buildCompareSelect();
     applyFilters();
 
     document.getElementById('loader').style.display      = 'none';
@@ -416,7 +462,8 @@ function applyFilters() {
   let items = Object.values(MARKET).filter(d => {
     const secOk = !SECTOR || d.sector === SECTOR;
     const srOk  = !q || d.symbol.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
-    return secOk && srOk;
+    const favOk = !FAV_ONLY || FAVORITES.has(d.symbol);
+    return secOk && srOk && favOk;
   });
 
   items.sort((a, b) => {
@@ -496,6 +543,7 @@ function buildTickerCard(d) {
     if (cardBrd) el.style.borderColor = cardBrd;
 
     el.innerHTML = `
+      <button class="tc-fav${FAVORITES.has(d.symbol) ? ' active' : ''}" onclick="toggleFavorite('${d.symbol}', event)" title="Favorito">${FAVORITES.has(d.symbol) ? '★' : '☆'}</button>
       <a class="tc-tv" href="${tvUrl(d.symbol)}" target="_blank" rel="noopener" title="Ver en TradingView" onclick="event.stopPropagation()">TV ↗</a>
       <div class="tc-sym">${d.symbol}</div>
       <div class="tc-name">${d.name}</div>
@@ -607,7 +655,7 @@ function renderDetail(sym) {
   document.getElementById('detail').innerHTML = `
     <div class="d-head">
       <div>
-        <div class="d-sym">${sym}
+        <div class="d-sym"><button class="tc-fav${FAVORITES.has(d.symbol) ? ' active' : ''}" style="position:static;font-size:1rem;vertical-align:middle" onclick="toggleFavorite('${d.symbol}', event)" title="Favorito">${FAVORITES.has(d.symbol) ? '★' : '☆'}</button> ${sym}
           <span style="font-size:.9rem;font-weight:400;color:var(--text2)">${d.name}</span>
         </div>
         <div class="d-name">Sector: ${secLbl} &nbsp;·&nbsp; CEDEAR disponible en BYMA
@@ -882,6 +930,7 @@ function renderDetail(sym) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '—';
 const f4 = v => (v !== null && v !== undefined) ? Number(v).toFixed(4) : '—';
+const round2 = v => Math.round(v * 100) / 100;
 // TradingView usa '.' para clases de acciones (ej. BRK.B) donde Yahoo Finance usa '-' (BRK-B)
 const tvSymbol = sym => sym.replace('-', '.');
 const tvUrl    = sym => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(sym))}`;
@@ -1063,6 +1112,155 @@ function renderRatio() {
   });
 }
 
+// ── Comparador multi-activo (normalizado a base 100) ────────────────────────────
+let compareChart = null;
+let COMPARE_LIST = [];
+
+const COMPARE_COLORS = ['#58a6ff','#3fb950','#f0b400','#f85149','#bc8cff','#39c5cf'];
+
+function buildCompareSelect() {
+  const symbols = Object.values(MARKET)
+    .map(d => ({ sym: d.symbol, name: d.name }))
+    .sort((a, b) => a.sym.localeCompare(b.sym));
+  const sel = document.getElementById('cmp-add');
+  sel.innerHTML = symbols.map(s => `<option value="${s.sym}">${s.sym} · ${s.name}</option>`).join('');
+
+  if (!COMPARE_LIST.length && symbols.length > 1) {
+    COMPARE_LIST = [symbols[0].sym, symbols[1].sym];
+  }
+}
+
+function addCompare() {
+  const sym = document.getElementById('cmp-add').value;
+  if (!sym) return;
+  if (COMPARE_LIST.includes(sym)) return;
+  if (COMPARE_LIST.length >= 6) {
+    alert('Máximo 6 activos a la vez para que el gráfico se siga leyendo bien.');
+    return;
+  }
+  COMPARE_LIST.push(sym);
+  renderCompare();
+}
+
+function removeCompare(sym) {
+  COMPARE_LIST = COMPARE_LIST.filter(s => s !== sym);
+  renderCompare();
+}
+
+function renderCompare() {
+  const chips = document.getElementById('cmp-chips');
+  const panel = document.getElementById('cmp-panel');
+
+  chips.innerHTML = COMPARE_LIST.map(sym => `
+    <span class="cmp-chip">${sym}<button onclick="removeCompare('${sym}')" title="Quitar">✕</button></span>
+  `).join('');
+
+  if (COMPARE_LIST.length < 2) {
+    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">Agregá al menos dos activos para comparar su performance.</p>';
+    if (compareChart) { compareChart.destroy(); compareChart = null; }
+    return;
+  }
+
+  // Fechas comunes a TODOS los activos elegidos
+  const seriesRaw = COMPARE_LIST.map(sym => {
+    const d = MARKET[sym];
+    const map = {};
+    (d?.hist_dates || []).forEach((dt, i) => map[dt] = d.hist_prices[i]);
+    return { sym, name: d?.name || sym, map };
+  });
+  let dates = Object.keys(seriesRaw[0].map);
+  seriesRaw.slice(1).forEach(s => { dates = dates.filter(dt => dt in s.map); });
+  dates.sort();
+
+  if (dates.length < 2) {
+    panel.innerHTML = '<p style="color:var(--text2);padding:1rem 0">No hay suficiente historial compartido entre los activos elegidos.</p>';
+    return;
+  }
+
+  // Normalizamos cada serie a base 100 en la primera fecha común
+  const datasets = seriesRaw.map((s, i) => {
+    const base = s.map[dates[0]];
+    const norm = dates.map(dt => round2((s.map[dt] / base) * 100));
+    return { sym: s.sym, name: s.name, norm, color: COMPARE_COLORS[i % COMPARE_COLORS.length] };
+  });
+
+  const perfRows = datasets.map(ds => {
+    const chg = ds.norm[ds.norm.length - 1] - 100;
+    return `<div class="stat"><div class="stat-lbl">${ds.sym}</div>
+      <div class="stat-val" style="color:${chg>0?'var(--green)':chg<0?'var(--red)':'var(--text2)'}">${chg>0?'+':''}${f2(chg)}%</div></div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="detail" style="margin-bottom:1.5rem">
+      <div class="section-lbl">Performance normalizada (base 100) · últimos ${dates.length} días</div>
+      <div class="stats">${perfRows}</div>
+      <div class="chart-wrap"><canvas id="cchart"></canvas></div>
+      <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
+        Todas las series arrancan en 100 el primer día compartido, así que la distancia entre líneas
+        muestra directamente quién rindió más o menos en el período — sin importar el precio en dólares de cada una.
+      </p>
+    </div>
+  `;
+
+  const ctx = document.getElementById('cchart').getContext('2d');
+  if (compareChart) compareChart.destroy();
+
+  compareChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: datasets.map(ds => ({
+        label: ds.sym,
+        data: ds.norm,
+        borderColor: ds.color,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: ds.color,
+        tension: 0.25,
+        fill: false,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#c9d1d9', boxWidth: 12, font: {size: 11} } },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: '#1c2128',
+          borderColor: 'rgba(255,255,255,0.15)',
+          borderWidth: 1,
+          titleColor: '#e6edf3',
+          bodyColor: '#c9d1d9',
+          padding: 10,
+          callbacks: {
+            title: items => {
+              const raw = items[0]?.label || '';
+              const [y, m, day] = raw.split('-').map(Number);
+              const dt = new Date(y, m - 1, day);
+              return dt.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
+            },
+            label: item => `  ${item.dataset.label}:  ${Number(item.parsed.y).toFixed(2)}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 7, font:{size:10}, color:'#c9d1d9' },
+          grid:  { display: false }
+        },
+        y: {
+          ticks: { font:{size:10}, color:'#c9d1d9' },
+          grid:  { color:'rgba(255,255,255,0.07)' }
+        }
+      }
+    }
+  });
+}
+
 // ── Vista switching ───────────────────────────────────────────────────────────
 let currentView  = 'grid';
 let signalFilter = 'buy';
@@ -1073,13 +1271,16 @@ function switchView(view) {
   document.getElementById('view-signals').style.display  = view === 'signals'  ? '' : 'none';
   document.getElementById('view-screener').style.display  = view === 'screener' ? '' : 'none';
   document.getElementById('view-ratio').style.display     = view === 'ratio'    ? '' : 'none';
+  document.getElementById('view-compare').style.display   = view === 'compare'  ? '' : 'none';
   document.getElementById('vnav-grid').classList.toggle('active',     view === 'grid');
   document.getElementById('vnav-signals').classList.toggle('active',  view === 'signals');
   document.getElementById('vnav-screener').classList.toggle('active', view === 'screener');
   document.getElementById('vnav-ratio').classList.toggle('active',    view === 'ratio');
+  document.getElementById('vnav-compare').classList.toggle('active',  view === 'compare');
   if (view === 'signals')  renderSignals();
   if (view === 'screener') applyScreener();
   if (view === 'ratio')    renderRatio();
+  if (view === 'compare')  renderCompare();
 }
 
 // ── Screener: 3 condiciones combinables (AND) ──────────────────────────────────
@@ -1178,9 +1379,45 @@ function applyScreener() {
     : 'Elegí al menos una condición para empezar a filtrar.';
 
   grid.innerHTML = '';
-  items
-    .sort((a, b) => scoreOf(b).total - scoreOf(a).total)
-    .forEach(d => grid.appendChild(buildTickerCard(d)));
+  SCREENER_RESULTS = items.sort((a, b) => scoreOf(b).total - scoreOf(a).total);
+  SCREENER_RESULTS.forEach(d => grid.appendChild(buildTickerCard(d)));
+}
+
+// Exporta los resultados actuales del Screener a un archivo CSV descargable.
+function exportScreenerCSV() {
+  if (!SCREENER_RESULTS.length) {
+    alert('No hay resultados para exportar. Elegí al menos una condición primero.');
+    return;
+  }
+  const cols = [
+    ['symbol','Ticker'], ['name','Nombre'], ['sector','Sector'],
+    ['price_usd','Precio USD'], ['change_pct','Var. %'],
+    ['rsi','RSI'], ['macd','MACD'], ['macd_signal','MACD señal'], ['macd_hist','MACD hist.'],
+    ['adx','ADX'], ['pdi','+DI'], ['ndi','-DI'],
+    ['stoch_k','Estocástico %K'], ['stoch_d','Estocástico %D'],
+    ['roc','ROC'], ['vol_rel','Vol. relativo'],
+    ['ma20','MA20'], ['ma50','MA50'], ['ma200','MA200'],
+    ['high_52w','Máx. 52 sem.'], ['low_52w','Mín. 52 sem.'],
+  ];
+  const esc = v => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = cols.map(c => c[1]).join(';');
+  const rows = SCREENER_RESULTS.map(d => cols.map(c => esc(d[c[0]])).join(';'));
+  const csv = '\uFEFF' + [header, ...rows].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `screener_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Score técnico ─────────────────────────────────────────────────────────────
