@@ -566,30 +566,6 @@ def compute_vol_rel(volumes, period=20):
     return round(volumes[-1] / avg, 2)
 
 
-def compute_beta(ticker_close, benchmark_close, lookback=252):
-    """Beta = covarianza(retornos diarios activo, retornos diarios benchmark) /
-    varianza(retornos diarios benchmark). Usa hasta 'lookback' ruedas superpuestas."""
-    try:
-        r_asset = ticker_close.pct_change().dropna()
-        r_bench = benchmark_close.pct_change().dropna()
-        r_asset, r_bench = r_asset.align(r_bench, join="inner")
-        if len(r_asset) > lookback:
-            r_asset = r_asset.iloc[-lookback:]
-            r_bench = r_bench.iloc[-lookback:]
-        if len(r_asset) < 30:
-            return None
-        var_bench = r_bench.var()
-        if not var_bench or pd.isna(var_bench):
-            return None
-        beta = r_asset.cov(r_bench) / var_bench
-        if pd.isna(beta):
-            return None
-        return round(float(beta), 2)
-    except Exception:
-        return None
-
-
-
 def compute_adx(highs, lows, closes, period=14):
     """ADX/DMI con suavizado de Wilder. Retorna (adx, pdi, ndi)."""
     if len(closes) < period * 2 + 1:
@@ -830,20 +806,12 @@ def fetch_all():
     print(f"Descargando {len(TICKERS)} tickers | {start_str} → {end_str}")
     print("-" * 60)
 
-    # Benchmark para Beta: se descarga una sola vez y se reutiliza para todos los tickers.
-    print("Descargando benchmark (SPY) para cálculo de Beta...")
-    spy_df = download_ticker("SPY", start_str, end_str)
-    spy_close = spy_df["Close"] if spy_df is not None else None
-    if spy_close is None:
-        print("  [WARN] No se pudo descargar SPY: Beta quedará en null para todos los tickers.")
-    print("-" * 60)
-
     results = {}
     ok = 0
     skip = 0
 
     for sym in TICKERS:
-        df = spy_df if (sym == "SPY" and spy_df is not None) else download_ticker(sym, start_str, end_str)
+        df = download_ticker(sym, start_str, end_str)
 
         if df is None:
             print(f"  [SKIP] {sym}")
@@ -884,7 +852,6 @@ def fetch_all():
             stoch_k, stoch_d              = compute_stochastic(highs, lows, closes)
             roc                           = compute_roc(closes)
             vol_rel                       = compute_vol_rel(volumes)
-            beta = compute_beta(df["Close"], spy_close) if (spy_close is not None and sym != "SPY") else (1.0 if sym == "SPY" else None)
             obv, obv_signal               = compute_obv(closes, volumes)
             ma_cross_status, ma_cross_event = compute_ma_cross(closes)
             rsi_series                    = _rsi_series(closes)
@@ -921,7 +888,6 @@ def fetch_all():
                 "stoch_k":     stoch_k,
                 "stoch_d":     stoch_d,
                 "roc":         roc,
-                "beta":        beta,
                 "obv":         obv,
                 "obv_signal":  obv_signal,
                 "ma_cross_status": ma_cross_status,
@@ -935,7 +901,7 @@ def fetch_all():
             if ma_cross_event: extra.append(ma_cross_event)
             if divergence:     extra.append(f"div_{divergence}")
             extra_str = ("  " + " ".join(extra)) if extra else ""
-            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}  Beta {beta}{extra_str}")
+            print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}{extra_str}")
 
         except Exception as e:
             print(f"  [ERR] {sym}: {e}")
