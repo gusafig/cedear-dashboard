@@ -903,9 +903,9 @@ def fetch_all():
             pct_from_52w_high = round((price - high_52w) / high_52w * 100, 2) if high_52w else None
             pct_from_52w_low  = round((price - low_52w) / low_52w * 100, 2) if low_52w else None
 
-            # Gráfico: últimos 90 días
-            hist_prices = [round(c, 2) for c in closes[-90:]]
-            hist_dates  = [d.strftime("%Y-%m-%d") for d in df.index[-90:]]
+            # Gráfico: últimos 6 meses (≈126 ruedas)
+            hist_prices = [round(c, 2) for c in closes[-126:]]
+            hist_dates  = [d.strftime("%Y-%m-%d") for d in df.index[-126:]]
 
             # Indicadores
             rsi                       = compute_rsi(closes)
