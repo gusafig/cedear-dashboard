@@ -845,7 +845,9 @@ def chunked(lst, n):
 # ── Proceso principal ─────────────────────────────────────────────────────────
 
 def fetch_all():
-    end_date   = datetime.today()
+    # yfinance trata 'end' como exclusivo (no incluye esa fecha), así que le
+    # sumamos un día extra para no perder la rueda de hoy si ya cerró.
+    end_date   = datetime.today() + timedelta(days=1)
     start_date = end_date - timedelta(days=365 * 3)
     start_str  = start_date.strftime("%Y-%m-%d")
     end_str    = end_date.strftime("%Y-%m-%d")
