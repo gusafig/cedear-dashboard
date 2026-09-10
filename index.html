@@ -234,8 +234,6 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <option value="vol_rel_desc">Volumen relativo ↓ (picos)</option>
       <option value="pct_high_asc">Más cerca del máx. 52 sem.</option>
       <option value="pct_low_asc">Más cerca del mín. 52 sem.</option>
-      <option value="beta_desc">Beta ↓ (más volátil)</option>
-      <option value="beta_asc">Beta ↑ (más defensiva)</option>
     </select>
     <select id="sector-sel" onchange="filterBySector()">
       <option value="">Todos los sectores</option>
@@ -438,8 +436,6 @@ function applyFilters() {
     if (by === 'vol_rel_desc') return (b.vol_rel ?? -1) - (a.vol_rel ?? -1);
     if (by === 'pct_high_asc') return (b.pct_from_52w_high ?? -1e9) - (a.pct_from_52w_high ?? -1e9);
     if (by === 'pct_low_asc')  return (a.pct_from_52w_low ?? 1e9) - (b.pct_from_52w_low ?? 1e9);
-    if (by === 'beta_desc') return (b.beta ?? -1e9) - (a.beta ?? -1e9);
-    if (by === 'beta_asc')  return (a.beta ?? 1e9) - (b.beta ?? 1e9);
     return 0;
   });
 
@@ -580,11 +576,6 @@ function renderDetail(sym) {
                             volSpike && dn     ? ['sig-sell','Pico con baja (convicción)'] :
                             volSpike           ? ['sig-neutral','Pico de volumen']         :
                                                   ['sig-neutral','Volumen normal'];
-
-  // Beta vs. SPY (lectura de volatilidad relativa, no es señal de compra/venta)
-  const [betaCls, betaLbl] = d.beta === null ? ['sig-neutral','Sin datos'] :
-                              d.beta > 1.2    ? ['sig-neutral','Más volátil que el mercado'] :
-                              d.beta < 0.8    ? ['sig-neutral','Menos volátil (defensiva)']  : ['sig-neutral','Similar al mercado'];
 
   // Cruce de medias (Golden/Death Cross)
   const crossLblMap = { golden_cross: 'Golden Cross reciente', death_cross: 'Death Cross reciente' };
@@ -740,13 +731,6 @@ function renderDetail(sym) {
         <div class="ind-row"><span>Desde el mínimo</span>
           <span style="color:var(--green)">${d.pct_from_52w_low!==null?'+'+f2(d.pct_from_52w_low)+'%':'—'}</span></div>
         <div class="ind-row"><span>Máx. / Mín. 52s</span><span>$${f2(d.high_52w)} / $${f2(d.low_52w)}</span></div>
-      </div>
-
-      <div class="ind">
-        <div class="ind-lbl">Beta vs. SPY (S&amp;P 500)</div>
-        <div class="ind-big" style="color:var(--blue)">${d.beta ?? '—'}</div>
-        <div class="ind-row"><span>Referencia</span><span>SPY = 1.00</span></div>
-        <div style="margin-top:8px"><span class="sig ${betaCls}">${betaLbl}</span></div>
       </div>
 
       <div class="ind">
@@ -1136,11 +1120,6 @@ const SCREENER_CONDITIONS = {
                        test: d => !!(d.bb_lower && d.price_usd < d.bb_lower) },
   bb_upper:         { group:'Volatilidad', label:'Precio sobre banda superior de Bollinger',
                        test: d => !!(d.bb_upper && d.price_usd > d.bb_upper) },
-  beta_high:        { group:'Volatilidad', label:'Beta alta (>1.2, más volátil que el mercado)',
-                       test: d => d.beta !== null && d.beta > 1.2 },
-  beta_low:         { group:'Volatilidad', label:'Beta baja (<0.8, más defensiva)',
-                       test: d => d.beta !== null && d.beta < 0.8 },
-
   vol_spike:        { group:'Volumen',    label:'Pico de volumen (≥2× el promedio)',
                        test: d => d.vol_rel !== null && d.vol_rel >= 2 },
   obv_bull:         { group:'Volumen',    label:'OBV confirma o anticipa suba',
