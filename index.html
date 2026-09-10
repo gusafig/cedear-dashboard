@@ -688,7 +688,7 @@ function renderDetail(sym) {
     </div>
 
     <div class="chart-section">
-      <div class="section-lbl">Precio · últimos 90 días</div>
+      <div class="section-lbl">Precio · últimos ${d.hist_dates ? d.hist_dates.length : ''} días</div>
       <div class="chart-wrap"><canvas id="pchart"></canvas></div>
     </div>
 
