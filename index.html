@@ -434,9 +434,6 @@ async function loadMarket() {
     document.getElementById('loader').style.display      = 'none';
     document.getElementById('ticker-grid-wrap').style.display = '';
 
-    const first = Object.keys(MARKET)[0];
-    if (first) selectTicker(first);
-
   } catch(e) {
     document.getElementById('loader').style.display = 'none';
     const box = document.getElementById('err-box');
@@ -483,7 +480,9 @@ function applyFilters() {
   const by = document.getElementById('sort-sel').value;
 
   let items = Object.values(MARKET).filter(d => {
-    const secOk = !SECTOR || d.sector === SECTOR;
+    // Si hay una búsqueda activa, ignoramos el filtro de sector para poder
+    // encontrar cualquier ticker sin tener que estar en "Todos los sectores".
+    const secOk = q ? true : (!SECTOR || d.sector === SECTOR);
     const srOk  = !q || d.symbol.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
     const favOk = !FAV_ONLY || FAVORITES.has(d.symbol);
     return secOk && srOk && favOk;
@@ -1365,6 +1364,15 @@ function switchView(view) {
 
 // ── Screener: 3 condiciones combinables (AND) ──────────────────────────────────
 const SCREENER_CONDITIONS = {
+  recovery_vol:     { group:'Patrones combinados', label:'📉→📈 Cayó, se estabiliza y sube el volumen',
+                       test: d => {
+                         const belowMa50    = d.ma50   !== null && d.price_usd < d.ma50;
+                         const rsiRecovering= d.rsi    !== null && d.rsi > 35 && d.rsi < 55;
+                         const stochTurnUp  = d.stoch_k!== null && d.stoch_d !== null && d.stoch_k > d.stoch_d;
+                         const volSpike     = d.vol_rel!== null && d.vol_rel >= 1.3;
+                         return belowMa50 && rsiRecovering && stochTurnUp && volSpike;
+                       } },
+
   rsi_oversold:     { group:'Momentum',   label:'RSI en sobreventa (≤30)',
                        test: d => d.rsi !== null && d.rsi <= 30 },
   rsi_overbought:   { group:'Momentum',   label:'RSI en sobrecompra (≥70)',
