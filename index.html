@@ -920,7 +920,8 @@ function renderDetail(sym) {
     </div>
 
     <div class="chart-section">
-      <div class="section-lbl">Precio · últimos ${d.hist_dates ? d.hist_dates.length : ''} días</div>
+      <div class="section-lbl">Precio · últimos ${d.hist_dates ? d.hist_dates.length : ''} días
+        ${d.hist_dates && d.hist_dates.length ? `<span style="color:var(--text3);font-weight:400">· datos hasta ${fmtDateEs(d.hist_dates[d.hist_dates.length-1])}</span>` : ''}</div>
       <div class="chart-wrap"><canvas id="pchart"></canvas></div>
     </div>
 
@@ -1163,6 +1164,11 @@ function renderDetail(sym) {
 const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '—';
 const f4 = v => (v !== null && v !== undefined) ? Number(v).toFixed(4) : '—';
 const round2 = v => Math.round(v * 100) / 100;
+const fmtDateEs = iso => {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
 // TradingView usa '.' para clases de acciones (ej. BRK.B) donde Yahoo Finance usa '-' (BRK-B)
 const tvSymbol = sym => sym.replace('-', '.');
 const tvUrl    = sym => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(sym))}`;
@@ -1223,6 +1229,14 @@ function renderRatio() {
   }
 
   const ratios   = dates.map(dt => mapA[dt] / mapB[dt]);
+  const lastA = (dA.hist_dates || [])[dA.hist_dates.length - 1];
+  const lastB = (dB.hist_dates || [])[dB.hist_dates.length - 1];
+  const lagNote = (lastA && lastB && lastA !== lastB)
+    ? `<p style="font-size:.68rem;color:#f0b400;margin-top:.4rem">
+         ⚠️ ${symA} tiene datos hasta ${fmtDateEs(lastA)} y ${symB} hasta ${fmtDateEs(lastB)} —
+         el gráfico usa solo las fechas en común entre los dos.
+       </p>`
+    : '';
   const current  = ratios[ratios.length - 1];
   const first    = ratios[0];
   const max      = Math.max(...ratios);
@@ -1265,13 +1279,15 @@ function renderRatio() {
           <div class="stat-val">USD ${f2(dB.price_usd)}</div></div>
       </div>
 
-      <div class="section-lbl">Ratio ${symA} / ${symB} · últimos ${dates.length} días</div>
+      <div class="section-lbl">Ratio ${symA} / ${symB} · últimos ${dates.length} días
+        <span style="color:var(--text3);font-weight:400">· datos hasta ${fmtDateEs(dates[dates.length-1])}</span></div>
       <div class="chart-wrap"><canvas id="rchart"></canvas></div>
 
       <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
         Ratio = precio ${symA} (USD) ÷ precio ${symB} (USD). Al ser ambos activos valuados en USD,
         el tipo de cambio se cancela y el ratio refleja la fuerza relativa de un activo contra el otro.
       </p>
+      ${lagNote}
     </div>
   `;
 
@@ -1422,15 +1438,32 @@ function renderCompare() {
       <div class="stat-val" style="color:${chg>0?'var(--green)':chg<0?'var(--red)':'var(--text2)'}">${chg>0?'+':''}${f2(chg)}%</div></div>`;
   }).join('');
 
+  // Si algún activo tiene datos más viejos que los demás, lo marcamos.
+  const lastDates = seriesRaw.map(s => {
+    const own = Object.keys(s.map).sort();
+    return { sym: s.sym, last: own[own.length - 1] };
+  });
+  const mostRecent = lastDates.reduce((a, b) => (a.last > b.last ? a : b)).last;
+  const laggards = lastDates.filter(x => x.last !== mostRecent);
+  const lagNote = laggards.length
+    ? `<p style="font-size:.68rem;color:#f0b400;margin-top:.4rem">
+         ⚠️ ${laggards.map(x => `${x.sym} (hasta ${fmtDateEs(x.last)})`).join(', ')}
+         ${laggards.length === 1 ? 'tiene' : 'tienen'} datos más viejos que el resto —
+         el gráfico usa solo las fechas en común entre todos.
+       </p>`
+    : '';
+
   panel.innerHTML = `
     <div class="detail" style="margin-bottom:1.5rem">
-      <div class="section-lbl">Performance normalizada (base 100) · últimos ${dates.length} días</div>
+      <div class="section-lbl">Performance normalizada (base 100) · últimos ${dates.length} días
+        <span style="color:var(--text3);font-weight:400">· datos hasta ${fmtDateEs(dates[dates.length-1])}</span></div>
       <div class="stats">${perfRows}</div>
       <div class="chart-wrap"><canvas id="cchart"></canvas></div>
       <p style="font-size:.68rem;color:var(--text3);margin-top:.75rem">
         Todas las series arrancan en 100 el primer día compartido, así que la distancia entre líneas
         muestra directamente quién rindió más o menos en el período — sin importar el precio en dólares de cada una.
       </p>
+      ${lagNote}
     </div>
   `;
 
