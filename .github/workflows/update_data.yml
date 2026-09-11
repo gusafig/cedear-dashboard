@@ -2,8 +2,8 @@ name: Actualizar datos de mercado
 
 on:
   schedule:
-    - cron: "30 22 * * 1-5"
-  workflow_dispatch:
+    - cron: "30 22 * * 1-5"   # 22:30 UTC = 19:30 Argentina (lunes a viernes)
+  workflow_dispatch:           # permite ejecutarlo manualmente
 
 permissions:
   contents: write
@@ -11,7 +11,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -32,12 +32,13 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git stash
-          git fetch origin
-          git checkout main
-          git pull origin main
-          git stash pop
+          
           git add data/market_data.json
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          
+          if git diff --cached --quiet; then
+            echo "Sin cambios en los datos"
+            exit 0
+          fi
+          
           git commit -m "data: actualizar mercado $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
-          git push origin main
+          git push origin HEAD:main
