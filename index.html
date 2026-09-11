@@ -51,6 +51,19 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .controls input{min-width:200px}
 .controls input:focus,.controls select:focus{border-color:var(--blue)}
 .controls select option{background:var(--bg2)}
+.search-wrap{position:relative;flex:1 1 220px;min-width:200px}
+.search-wrap input{width:100%;box-sizing:border-box;min-width:0}
+.search-suggest{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);
+  max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.search-suggest-item{display:flex;align-items:center;gap:8px;padding:8px 12px;
+  cursor:pointer;font-size:.82rem}
+.search-suggest-item:hover,.search-suggest-item.active{background:var(--bg3)}
+.search-suggest-item .ss-sym{font-weight:700;min-width:52px}
+.search-suggest-item .ss-name{color:var(--text2);flex:1;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.search-suggest-item .ss-price{color:var(--text3);font-size:.75rem}
+.search-suggest-empty{padding:10px 12px;color:var(--text3);font-size:.8rem}
 
 /* ── Tabs sector ── */
 .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem}
@@ -241,7 +254,13 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
   <div class="err" id="err-box" style="display:none"></div>
 
   <div class="controls">
-    <input id="search" type="text" placeholder="Buscar ticker o empresa…" oninput="applyFilters()"/>
+    <div class="search-wrap">
+      <input id="search" type="text" placeholder="Buscar ticker o empresa…" autocomplete="off"
+             oninput="onSearchInput()" onfocus="onSearchInput()"
+             onkeydown="onSearchKeydown(event)"
+             onblur="setTimeout(()=>{document.getElementById('search-suggest').style.display='none'}, 150)"/>
+      <div id="search-suggest" class="search-suggest" style="display:none"></div>
+    </div>
     <button class="tab" id="fav-toggle" onclick="toggleFavOnly()">⭐ Favoritos</button>
     <select id="sort-sel" onchange="applyFilters()">
       <option value="sym">A – Z</option>
@@ -468,6 +487,78 @@ function buildSectorSelect() {
   });
 }
 
+// ── Autocompletado del buscador ─────────────────────────────────────────────
+let SUGGEST_ITEMS  = [];
+let SUGGEST_ACTIVE = -1;
+
+function onSearchInput() {
+  applyFilters();
+
+  const q   = document.getElementById('search').value.trim().toLowerCase();
+  const box = document.getElementById('search-suggest');
+
+  if (!q) { box.style.display = 'none'; SUGGEST_ITEMS = []; return; }
+
+  const starts = [], contains = [];
+  Object.values(MARKET).forEach(d => {
+    const sym = d.symbol.toLowerCase(), name = d.name.toLowerCase();
+    if (sym.startsWith(q)) starts.push(d);
+    else if (sym.includes(q) || name.includes(q)) contains.push(d);
+  });
+  starts.sort((a, b) => a.symbol.length - b.symbol.length || a.symbol.localeCompare(b.symbol));
+  contains.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  SUGGEST_ITEMS  = [...starts, ...contains].slice(0, 8);
+  SUGGEST_ACTIVE = -1;
+
+  if (!SUGGEST_ITEMS.length) {
+    box.innerHTML = '<div class="search-suggest-empty">Sin resultados</div>';
+    box.style.display = 'block';
+    return;
+  }
+
+  box.innerHTML = SUGGEST_ITEMS.map(d => `
+    <div class="search-suggest-item" onmousedown="pickSuggestion('${d.symbol}')">
+      <span class="ss-sym">${d.symbol}</span>
+      <span class="ss-name">${d.name}</span>
+      <span class="ss-price">USD ${f2(d.price_usd)}</span>
+    </div>
+  `).join('');
+  box.style.display = 'block';
+}
+
+function pickSuggestion(sym) {
+  document.getElementById('search').value = sym;
+  document.getElementById('search-suggest').style.display = 'none';
+  applyFilters();
+  selectTicker(sym);
+}
+
+function onSearchKeydown(e) {
+  const box = document.getElementById('search-suggest');
+  if (box.style.display === 'none' || !SUGGEST_ITEMS.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    SUGGEST_ACTIVE = Math.min(SUGGEST_ACTIVE + 1, SUGGEST_ITEMS.length - 1);
+    highlightSuggestion();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    SUGGEST_ACTIVE = Math.max(SUGGEST_ACTIVE - 1, 0);
+    highlightSuggestion();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = SUGGEST_ACTIVE >= 0 ? SUGGEST_ACTIVE : 0;
+    if (SUGGEST_ITEMS[idx]) pickSuggestion(SUGGEST_ITEMS[idx].symbol);
+  } else if (e.key === 'Escape') {
+    box.style.display = 'none';
+  }
+}
+
+function highlightSuggestion() {
+  const box = document.getElementById('search-suggest');
+  [...box.children].forEach((el, i) => el.classList.toggle('active', i === SUGGEST_ACTIVE));
+}
+
 function filterBySector() {
   SECTOR = document.getElementById('sector-sel').value;
   buildTabs();
@@ -483,7 +574,9 @@ function applyFilters() {
     // Si hay una búsqueda activa, ignoramos el filtro de sector para poder
     // encontrar cualquier ticker sin tener que estar en "Todos los sectores".
     const secOk = q ? true : (!SECTOR || d.sector === SECTOR);
-    const srOk  = !q || d.symbol.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
+    // El ticker exige coincidencia exacta (así "NU" no trae "NUE"); el nombre
+    // de la empresa sigue admitiendo coincidencia parcial.
+    const srOk  = !q || d.symbol.toLowerCase() === q || d.name.toLowerCase().includes(q);
     const favOk = !FAV_ONLY || FAVORITES.has(d.symbol);
     return secOk && srOk && favOk;
   });
