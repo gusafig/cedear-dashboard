@@ -30,6 +30,11 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 .hdr-title h1{font-size:1.2rem;font-weight:600;letter-spacing:-.02em}
 .hdr-title p{font-size:.78rem;color:var(--text2);margin-top:2px}
 .hdr-right{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.btn-reset{display:flex;align-items:center;gap:6px;background:rgba(88,166,255,.1);
+  border:1px solid rgba(88,166,255,.4);color:var(--blue);border-radius:var(--radius);
+  padding:8px 16px;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap;
+  transition:all .15s}
+.btn-reset:hover{background:rgba(88,166,255,.2);border-color:var(--blue)}
 .pill{font-size:.7rem;font-weight:500;padding:3px 8px;border-radius:99px;
       display:inline-flex;align-items:center;gap:4px;border:1px solid}
 .pill-green{color:var(--green);background:var(--green2);border-color:rgba(63,185,80,.3)}
@@ -42,6 +47,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
           padding:8px 14px;margin-bottom:1.25rem;display:flex;align-items:center;
           gap:1.5rem;flex-wrap:wrap;font-size:.8rem;color:var(--text2)}
 .ccl-bar strong{color:var(--text)}
+
+.disclaimer-bar{display:flex;align-items:flex-start;gap:10px;
+  background:rgba(240,180,0,.08);border:1px solid rgba(240,180,0,.25);
+  border-radius:var(--radius);padding:9px 12px;margin-bottom:1rem;
+  font-size:.76rem;line-height:1.4;color:var(--text2)}
+.disclaimer-bar strong{color:var(--text)}
+.disclaimer-bar button{margin-left:auto;flex:0 0 auto;background:none;border:none;
+  color:var(--text3);cursor:pointer;font-size:.85rem;padding:0 4px;line-height:1.4}
+.disclaimer-bar button:hover{color:var(--text)}
 
 /* ── Controles ── */
 .controls{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center}
@@ -239,10 +253,20 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <h1>CEDEAR Dashboard</h1>
       <p>NYSE · NASDAQ · BYMA · Datos: Yahoo Finance</p>
     </div>
-    <div class="hdr-right" id="hdr-right">
+    <button class="btn-reset" onclick="resetHome()" title="Volver al inicio: sin ticker seleccionado, sectores colapsados, sin filtros">
+      ↺ Reiniciar vista
+    </button>
+    <div class="hdr-right" id="hdr-right" style="margin-left:auto">
       <span class="pill pill-yellow"><span class="dot"></span>Cargando…</span>
     </div>
   </header>
+
+  <div class="disclaimer-bar" id="disclaimer-bar">
+    <span>ℹ️ Los datos se actualizan manualmente, normalmente una vez por día luego del cierre de la rueda.
+      Los indicadores técnicos (RSI, MACD, medias móviles, etc.) reflejan el <strong>cierre de la última rueda</strong>,
+      no son precios en vivo intradiario.</span>
+    <button onclick="dismissDisclaimer()" title="Cerrar aviso" aria-label="Cerrar">✕</button>
+  </div>
 
   <div class="ccl-bar" id="ccl-bar">
     <span>TC CCL: <strong id="ccl-val">—</strong> ARS/USD</span>
@@ -262,7 +286,6 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
       <div id="search-suggest" class="search-suggest" style="display:none"></div>
     </div>
     <button class="tab" id="fav-toggle" onclick="toggleFavOnly()">⭐ Favoritos</button>
-    <button class="tab" onclick="resetHome()" title="Volver al inicio: sin ticker seleccionado, sectores colapsados, sin filtros">↺ Reiniciar vista</button>
     <select id="sort-sel" onchange="applyFilters()">
       <option value="sym">A – Z</option>
       <option value="pct_desc">Mayor variación +</option>
@@ -433,7 +456,17 @@ const SECTOR_LABEL = {
 const DATA_URL = 'data/market_data.json';
 
 // ── Arranque ──────────────────────────────────────────────────────────────────
+const DISCLAIMER_KEY = 'cedear_disclaimer_dismissed';
+
+function dismissDisclaimer() {
+  document.getElementById('disclaimer-bar').style.display = 'none';
+  localStorage.setItem(DISCLAIMER_KEY, '1');
+}
+
 async function boot() {
+  if (localStorage.getItem(DISCLAIMER_KEY) === '1') {
+    document.getElementById('disclaimer-bar').style.display = 'none';
+  }
   populateScreenerSelects();
   document.getElementById('fav-toggle').textContent = `⭐ Favoritos (${FAVORITES.size})`;
   await loadCCL();
@@ -1761,5 +1794,4 @@ boot();
 </script>
 </body>
 </html>
-
 
