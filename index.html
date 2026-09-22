@@ -57,6 +57,28 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
   color:var(--text3);cursor:pointer;font-size:.85rem;padding:0 4px;line-height:1.4}
 .disclaimer-bar button:hover{color:var(--text)}
 
+/* ── Alerta de setup (rebote MA200 + piso) ── */
+@keyframes setupPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(188,140,255,.45)}
+  50%{box-shadow:0 0 0 6px rgba(188,140,255,0)}
+}
+.setup-alert-bar{display:none;align-items:flex-start;gap:10px;
+  background:var(--purple2);border:1px solid rgba(188,140,255,.5);
+  border-radius:var(--radius);padding:10px 14px;margin-bottom:1rem;
+  font-size:.82rem;line-height:1.4;color:var(--text);
+  animation:setupPulse 2.2s ease-in-out infinite}
+.setup-alert-bar.show{display:flex}
+.setup-alert-bar .sab-icon{font-size:1.1rem}
+.setup-alert-bar strong{color:var(--purple)}
+.setup-alert-bar .sab-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.setup-alert-chip{cursor:pointer;border:1px solid rgba(188,140,255,.5);
+  background:rgba(188,140,255,.12);color:var(--text);border-radius:999px;
+  padding:2px 10px;font-size:.76rem;font-weight:600}
+.setup-alert-chip:hover{background:rgba(188,140,255,.25)}
+.setup-alert-bar button{margin-left:auto;flex:0 0 auto;background:none;border:none;
+  color:var(--text3);cursor:pointer;font-size:.85rem;padding:0 4px;line-height:1.4}
+.setup-alert-bar button:hover{color:var(--text)}
+
 /* ── Controles ── */
 .controls{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center}
 .controls input,.controls select{
@@ -268,6 +290,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
     <button onclick="dismissDisclaimer()" title="Cerrar aviso" aria-label="Cerrar">✕</button>
   </div>
 
+  <div class="setup-alert-bar" id="setup-alert-bar">
+    <span class="sab-icon">🎯</span>
+    <div style="flex:1">
+      <span><strong>Setup detectado:</strong> <span id="setup-alert-count"></span> acción(es) rebotaron en su MA200, bajaron la volatilidad y formaron piso.</span>
+      <div class="sab-chips" id="setup-alert-chips"></div>
+    </div>
+    <button onclick="dismissSetupAlert()" title="Cerrar aviso" aria-label="Cerrar">✕</button>
+  </div>
+
   <div class="ccl-bar" id="ccl-bar">
     <span>TC CCL: <strong id="ccl-val">—</strong> ARS/USD</span>
     <span>Compra: <strong id="ccl-compra">—</strong></span>
@@ -463,6 +494,37 @@ function dismissDisclaimer() {
   localStorage.setItem(DISCLAIMER_KEY, '1');
 }
 
+const SETUP_ALERT_KEY = 'cedear_setup_alert_dismissed_at';
+
+function buildSetupAlert(updatedAt) {
+  const bar = document.getElementById('setup-alert-bar');
+  const matches = Object.values(MARKET)
+    .filter(d => d.setup_rebote_piso)
+    .sort((a, b) => a.symbol.localeCompare(b.symbol));
+
+  if (!matches.length) { bar.classList.remove('show'); return; }
+
+  // Si ya se cerró la alerta para esta misma actualización de datos, no la
+  // volvemos a mostrar hasta que haya datos nuevos (nuevo updated_at).
+  if (localStorage.getItem(SETUP_ALERT_KEY) === updatedAt) {
+    bar.classList.remove('show');
+    return;
+  }
+
+  document.getElementById('setup-alert-count').textContent = matches.length;
+  document.getElementById('setup-alert-chips').innerHTML = matches.map(d => `
+    <span class="setup-alert-chip" onclick="selectTicker('${d.symbol}')">${d.symbol}</span>
+  `).join('');
+  bar.dataset.updatedAt = updatedAt || '';
+  bar.classList.add('show');
+}
+
+function dismissSetupAlert() {
+  const bar = document.getElementById('setup-alert-bar');
+  bar.classList.remove('show');
+  localStorage.setItem(SETUP_ALERT_KEY, bar.dataset.updatedAt || '');
+}
+
 async function boot() {
   if (localStorage.getItem(DISCLAIMER_KEY) === '1') {
     document.getElementById('disclaimer-bar').style.display = 'none';
@@ -508,6 +570,7 @@ async function loadMarket() {
     buildSectorSelect();
     buildRatioSelects();
     buildCompareSelect();
+    buildSetupAlert(updAt);
     applyFilters();
 
     document.getElementById('loader').style.display      = 'none';
