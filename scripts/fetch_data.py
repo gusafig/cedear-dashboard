@@ -685,6 +685,93 @@ def compute_divergence(closes, rsi_series, lookback=40, order=3):
 
     return None
 
+def compute_ma200_bounce(closes, lows, lookback=15, touch_tol=0.03, recovery_pct=0.02):
+    """
+    Detecta si el precio tocó/testeó la MA200 en las últimas `lookback` ruedas
+    (mínimo de la rueda por debajo o cerca -touch_tol- de la media) y desde ese
+    toque el precio se recuperó al menos `recovery_pct` y volvió a operar por
+    encima de la MA200.
+    Devuelve (rebotó: bool, ruedas_desde_el_toque: int|None)
+    """
+    if len(closes) < 200 + lookback:
+        return False, None
+
+    ma200_s = _sma_series(closes, 200)          # alineada a closes[200-1:]
+    offset  = len(closes) - len(ma200_s)
+    n       = min(lookback, len(ma200_s))
+
+    touch_i = None
+    for i in range(len(ma200_s) - n, len(ma200_s)):
+        idx = offset + i
+        ma  = ma200_s[i]
+        if ma and lows[idx] <= ma * (1 + touch_tol):
+            touch_i = i                          # se queda con el toque más reciente
+
+    if touch_i is None:
+        return False, None
+
+    touch_idx  = offset + touch_i
+    price_now  = closes[-1]
+    ma_now     = ma200_s[-1]
+    days_since = (len(closes) - 1) - touch_idx
+
+    bounced = (price_now > ma_now) and (price_now >= closes[touch_idx] * (1 + recovery_pct))
+    return bool(bounced), days_since
+
+def compute_volatility_state(closes, short=10, long=60, contraction_ratio=0.65):
+    """
+    Compara la volatilidad reciente (desvío estándar de retornos diarios, `short`
+    ruedas) contra la de mediano plazo (`long` ruedas). Si el ratio corto/largo
+    cae por debajo de `contraction_ratio`, se considera una contracción notable
+    de volatilidad (compresión típica de una fase de consolidación).
+    Devuelve (vol_corta_%, vol_larga_%, ratio, contraída: bool)
+    """
+    if len(closes) < long + 1:
+        return None, None, None, False
+
+    returns = [(closes[i] / closes[i - 1] - 1) for i in range(1, len(closes)) if closes[i - 1]]
+
+    def _std(vals):
+        if not vals:
+            return None
+        m = sum(vals) / len(vals)
+        return (sum((x - m) ** 2 for x in vals) / len(vals)) ** 0.5
+
+    vol_short = _std(returns[-short:])
+    vol_long  = _std(returns[-long:])
+
+    if vol_short is None or vol_long is None or vol_long == 0:
+        return None, None, None, False
+
+    ratio      = vol_short / vol_long
+    contracted = ratio <= contraction_ratio
+    return round(vol_short * 100, 2), round(vol_long * 100, 2), round(ratio, 2), bool(contracted)
+
+def compute_base_formation(lows, recent=10, prior=30, tol=0.03, range_max=0.08):
+    """
+    Aproximación simple a un "piso": el mínimo de las últimas `recent` ruedas no
+    perfora (más allá de `tol`) el mínimo de las `prior` ruedas anteriores, y el
+    rango entre el máximo y el mínimo de esas `recent` ruedas es acotado
+    (≤ `range_max`), es decir, el precio dejó de hacer mínimos decrecientes y
+    empezó a lateralizar.
+    """
+    if len(lows) < recent + prior:
+        return False
+
+    recent_window = lows[-recent:]
+    prior_window  = lows[-(recent + prior):-recent]
+
+    recent_low = min(recent_window)
+    prior_low  = min(prior_window)
+    if prior_low == 0:
+        return False
+
+    not_lower_low = recent_low >= prior_low * (1 - tol)
+    recent_range  = (max(recent_window) - recent_low) / recent_low if recent_low else 1
+    tight_range   = recent_range <= range_max
+
+    return bool(not_lower_low and tight_range)
+
 # ── Descarga ─────────────────────────────────────────────────────────────────
 
 def download_ticker(sym, start_str, end_str, retries=3):
@@ -817,6 +904,11 @@ def fetch_all():
             ma_cross_status, ma_cross_event = compute_ma_cross(closes)
             rsi_series = _rsi_series(closes)
             divergence = compute_divergence(closes, rsi_series)
+
+            ma200_bounce, ma200_bounce_days = compute_ma200_bounce(closes, lows)
+            vol_short, vol_long, vol_ratio, vol_contracted = compute_volatility_state(closes)
+            piso_formado = compute_base_formation(lows)
+            setup_rebote_piso = bool(ma200_bounce and vol_contracted and piso_formado)
 
             results[sym] = {
                 "symbol": sym,
