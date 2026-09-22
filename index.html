@@ -758,6 +758,10 @@ function buildTickerCard(d) {
       badges.push('<span class="badge badge-buy">Div. ▲</span>');
     if (d.divergence === 'bajista')
       badges.push('<span class="badge badge-sell">Div. ▼</span>');
+    if (d.setup_rebote_piso)
+      badges.push('<span class="badge badge-purple">Rebote+Piso MA200</span>');
+    else if (d.ma200_bounce)
+      badges.push('<span class="badge badge-buy">Rebote MA200</span>');
 
     // Color de fondo según score técnico combinado
     const score = scoreOf(d);
@@ -881,6 +885,12 @@ function renderDetail(sym) {
     d.divergence === 'alcista' ? ['sig-buy',  'Divergencia alcista (RSI)'] :
     d.divergence === 'bajista' ? ['sig-sell', 'Divergencia bajista (RSI)'] :
                                   ['sig-neutral', 'Sin divergencia'];
+
+  // Rebote en MA200 + contracción de volatilidad + piso
+  const [setupCls, setupLbl] =
+    d.setup_rebote_piso ? ['sig-buy', 'Setup completo: rebotó en MA200, bajó la volatilidad y formó piso'] :
+    d.ma200_bounce      ? ['sig-neutral', 'Rebotó en MA200 (faltan piso y/o baja de volatilidad)'] :
+                           ['sig-neutral', 'Sin señal'];
 
   const secLbl = SECTOR_LABEL[d.sector] || d.sector;
 
@@ -1034,6 +1044,19 @@ function renderDetail(sym) {
         <div class="ind-row"><span>RSI actual</span><span>${d.rsi ?? '—'}</span></div>
         <div class="ind-row"><span>Ventana analizada</span><span>últimos 40 días</span></div>
         <div style="margin-top:8px"><span class="sig ${divCls}">${divLbl}</span></div>
+      </div>
+
+      <div class="ind">
+        <div class="ind-lbl">Rebote en MA200 + Piso</div>
+        <div class="ind-row"><span>Rebote en MA200</span>
+          <span style="color:${d.ma200_bounce?'var(--green)':'var(--text2)'}">${d.ma200_bounce ? `Sí (hace ${d.ma200_bounce_days} rueda${d.ma200_bounce_days===1?'':'s'})` : 'No'}</span></div>
+        <div class="ind-row"><span>Volatilidad corta / larga</span>
+          <span>${d.vol_short!=null && d.vol_long!=null ? f2(d.vol_short)+'% / '+f2(d.vol_long)+'%' : '—'}</span></div>
+        <div class="ind-row"><span>Compresión de volatilidad</span>
+          <span style="color:${d.vol_contracted?'var(--green)':'var(--text2)'}">${d.vol_contracted?'Sí':'No'}</span></div>
+        <div class="ind-row"><span>Piso formado</span>
+          <span style="color:${d.piso_formado?'var(--green)':'var(--text2)'}">${d.piso_formado?'Sí':'No'}</span></div>
+        <div style="margin-top:8px"><span class="sig ${setupCls}">${setupLbl}</span></div>
       </div>
 
     </div>
@@ -1611,6 +1634,15 @@ const SCREENER_CONDITIONS = {
                        test: d => d.pct_from_52w_high !== null && d.pct_from_52w_high >= -5 },
   near_52w_low:     { group:'Rango 52 semanas', label:'A menos de 5% del mínimo de 52 semanas',
                        test: d => d.pct_from_52w_low !== null && d.pct_from_52w_low <= 5 },
+
+  rebote_piso_ma200:{ group:'Patrones combinados', label:'🎯 Rebotó en MA200, bajó la volatilidad y formó piso',
+                       test: d => !!d.setup_rebote_piso },
+  ma200_bounce:     { group:'Tendencia', label:'Rebotó en la MA200 en los últimos días',
+                       test: d => !!d.ma200_bounce },
+  vol_contracted:   { group:'Volatilidad', label:'Volatilidad bajó notablemente (compresión)',
+                       test: d => !!d.vol_contracted },
+  piso_formado:     { group:'Patrones combinados', label:'Mínimos se estabilizan (posible piso)',
+                       test: d => !!d.piso_formado },
 };
 
 function populateScreenerSelects() {
@@ -1719,6 +1751,9 @@ function scoreOf(d) {
   // Divergencia RSI vs. precio
   if (d.divergence === 'alcista') buy++;
   else if (d.divergence === 'bajista') sell++;
+  // Rebote en MA200 + baja de volatilidad + piso: patrón combinado, pesa doble
+  if (d.setup_rebote_piso) buy += 2;
+  else if (d.ma200_bounce) buy++;
   return { buy, sell, total: buy - sell };
 }
 
@@ -1772,6 +1807,8 @@ function renderSignals() {
                         sell: d.obv_signal === 'confirma_baja' || d.obv_signal === 'divergencia_bajista' },
       { label:'Div',   buy:  d.divergence === 'alcista',
                         sell: d.divergence === 'bajista' },
+      { label:'Piso',  buy:  !!d.setup_rebote_piso || !!d.ma200_bounce,
+                        sell: false },
     ];
     const dots = indicators.map(i => {
       const dc = i.buy ? 'on-buy' : i.sell ? 'on-sell' : '';
