@@ -685,12 +685,13 @@ def compute_divergence(closes, rsi_series, lookback=40, order=3):
 
     return None
 
-def compute_ma200_bounce(closes, lows, lookback=15, touch_tol=0.03, recovery_pct=0.02):
+def compute_ma200_bounce(closes, lows, lookback=15, touch_tol=0.03, recovery_pct=0.02, min_days_since=1):
     """
-    Detecta si el precio tocó/testeó la MA200 en las últimas `lookback` ruedas
-    (mínimo de la rueda por debajo o cerca -touch_tol- de la media) y desde ese
-    toque el precio se recuperó al menos `recovery_pct` y volvió a operar por
-    encima de la MA200.
+    Busca, dentro de las últimas `lookback` ruedas, el mínimo (piso/toque) más
+    cercano a la MA200. Si ese mínimo estuvo a distancia `touch_tol` de la media
+    (por debajo o levemente por encima), y desde entonces el precio se recuperó
+    al menos `recovery_pct` y volvió a operar por encima de la MA200, se
+    considera un rebote en la MA200.
     Devuelve (rebotó: bool, ruedas_desde_el_toque: int|None)
     """
     if len(closes) < 200 + lookback:
@@ -700,22 +701,29 @@ def compute_ma200_bounce(closes, lows, lookback=15, touch_tol=0.03, recovery_pct
     offset  = len(closes) - len(ma200_s)
     n       = min(lookback, len(ma200_s))
 
-    touch_i = None
-    for i in range(len(ma200_s) - n, len(ma200_s)):
-        idx = offset + i
-        ma  = ma200_s[i]
-        if ma and lows[idx] <= ma * (1 + touch_tol):
-            touch_i = i                          # se queda con el toque más reciente
-
-    if touch_i is None:
+    # Ventana de análisis, sin incluir la rueda de hoy (necesitamos días de
+    # recuperación posteriores al toque para poder hablar de "rebote").
+    window = [i for i in range(len(ma200_s) - n, len(ma200_s)) if i < len(ma200_s) - 1]
+    if not window:
         return False, None
 
-    touch_idx  = offset + touch_i
+    trough_i   = min(window, key=lambda i: lows[offset + i])
+    trough_idx = offset + trough_i
+    ma_trough  = ma200_s[trough_i]
+
+    touched = bool(ma_trough) and lows[trough_idx] <= ma_trough * (1 + touch_tol)
+    if not touched:
+        return False, None
+
     price_now  = closes[-1]
     ma_now     = ma200_s[-1]
-    days_since = (len(closes) - 1) - touch_idx
+    days_since = (len(closes) - 1) - trough_idx
 
-    bounced = (price_now > ma_now) and (price_now >= closes[touch_idx] * (1 + recovery_pct))
+    bounced = (
+        days_since >= min_days_since
+        and price_now > ma_now
+        and price_now >= lows[trough_idx] * (1 + recovery_pct)
+    )
     return bool(bounced), days_since
 
 def compute_volatility_state(closes, short=10, long=60, contraction_ratio=0.65):
@@ -946,6 +954,14 @@ def fetch_all():
                 "ma_cross_status": ma_cross_status,
                 "ma_cross_event": ma_cross_event,
                 "divergence": divergence,
+                "ma200_bounce": ma200_bounce,
+                "ma200_bounce_days": ma200_bounce_days,
+                "vol_short": vol_short,
+                "vol_long": vol_long,
+                "vol_ratio": vol_ratio,
+                "vol_contracted": vol_contracted,
+                "piso_formado": piso_formado,
+                "setup_rebote_piso": setup_rebote_piso,
                 "hist_prices": hist_prices,
                 "hist_dates": hist_dates,
             }
@@ -953,6 +969,7 @@ def fetch_all():
             extra = []
             if ma_cross_event: extra.append(ma_cross_event)
             if divergence: extra.append(f"div_{divergence}")
+            if setup_rebote_piso: extra.append("REBOTE+PISO_MA200")
             extra_str = ("  " + " ".join(extra)) if extra else ""
             print(f"  [OK] {sym:6s}  USD {price:>9.2f}  ({change_pct:+.2f}%)  RSI {rsi}  ADX {adx}{extra_str}")
 
