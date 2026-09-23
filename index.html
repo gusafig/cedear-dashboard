@@ -496,6 +496,12 @@ function dismissDisclaimer() {
 
 const SETUP_ALERT_KEY = 'cedear_setup_alert_dismissed_at';
 
+function formatSetupSince(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-');
+  return ` (desde ${d}/${m})`;
+}
+
 function buildSetupAlert(updatedAt) {
   const bar = document.getElementById('setup-alert-bar');
   const matches = Object.values(MARKET)
@@ -513,7 +519,7 @@ function buildSetupAlert(updatedAt) {
 
   document.getElementById('setup-alert-count').textContent = matches.length;
   document.getElementById('setup-alert-chips').innerHTML = matches.map(d => `
-    <span class="setup-alert-chip" onclick="selectTicker('${d.symbol}')">${d.symbol}</span>
+    <span class="setup-alert-chip" onclick="selectTicker('${d.symbol}')" title="${d.setup_since ? 'Setup activo desde ' + d.setup_since : ''}">${d.symbol}${formatSetupSince(d.setup_since)}</span>
   `).join('');
   bar.dataset.updatedAt = updatedAt || '';
   bar.classList.add('show');
