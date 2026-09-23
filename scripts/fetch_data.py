@@ -837,6 +837,62 @@ def chunked(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
+def most_recent_trading_day(ref_dt):
+    """Último día hábil (lunes a viernes) antes de ref_dt. No contempla
+    feriados bursátiles de EE.UU.: en un feriado va a esperar un dato que
+    no existe, y el parche de cotización en vivo de más abajo terminaría
+    repitiendo el cierre anterior como si fuera un día nuevo. Como
+    limitación conocida, no debería pasar más de un puñado de veces al año."""
+    d = (ref_dt - timedelta(days=1)).date()
+    while d.weekday() >= 5:  # 5=sábado, 6=domingo
+        d -= timedelta(days=1)
+    return d
+
+def fetch_live_close(sym, retries=2):
+    """
+    Trae el precio 'en vivo' (last_price / regularMarketPrice) de Yahoo
+    Finance. Se usa cuando el historial diario (yf.download) todavía no
+    publicó el Close de la sesión más reciente -algo que Yahoo tarda en
+    completar y que puede demorar más de lo esperado. Con el mercado
+    cerrado, este valor coincide con el cierre oficial de la última rueda.
+    """
+    for attempt in range(retries):
+        try:
+            fi = yf.Ticker(sym).fast_info
+
+            def g(*names):
+                for n in names:
+                    try:
+                        v = fi[n]
+                        if v is not None:
+                            return v
+                    except Exception:
+                        pass
+                    v = getattr(fi, n, None)
+                    if v is not None:
+                        return v
+                return None
+
+            price = g("last_price", "lastPrice")
+            prev  = g("previous_close", "previousClose", "regularMarketPreviousClose")
+            high  = g("day_high", "dayHigh", "regularMarketDayHigh")
+            low   = g("day_low", "dayLow", "regularMarketDayLow")
+            vol   = g("last_volume", "lastVolume", "regularMarketVolume")
+
+            if price:
+                return {
+                    "close": float(price),
+                    "prev_close": float(prev) if prev else None,
+                    "high": float(high) if high else float(price),
+                    "low": float(low) if low else float(price),
+                    "volume": float(vol) if vol else 0.0,
+                }
+        except Exception as e:
+            print(f"    [LIVE-RETRY {attempt+1}] {sym}: {e}")
+        if attempt < retries - 1:
+            time.sleep(5)
+    return None
+
 # ── Proceso principal ─────────────────────────────────────────────────────────
 
 def fetch_all():
@@ -865,30 +921,40 @@ def fetch_all():
             time.sleep(0.8)
 
     # ── Verificación de atraso ──────────────────────────────────────────────
-    # El lote (download_batch) a veces devuelve un cierre más viejo que el
-    # real (aparentemente una respuesta en caché de Yahoo Finance). Se toma
-    # como referencia la fecha más nueva vista entre todos los tickers, y a
-    # los que quedaron atrás se los reintenta con descarga individual, que en
-    # la práctica trae el dato correcto con más frecuencia.
+    # yf.download (en lote o individual, da igual) puede no tener todavía el
+    # Close de la sesión más reciente -Yahoo tarda en publicarlo en el
+    # historial diario, a veces más de un día. En vez de esperar, para los
+    # tickers atrasados se completa el último dato con la cotización en vivo
+    # (fast_info), que si el mercado está cerrado YA es el cierre oficial.
     last_dates = {}
     for sym, df in raw_data.items():
         if df is not None and len(df) > 0:
             last_dates[sym] = df.index[-1].date()
 
     if last_dates:
-        target_date = max(last_dates.values())
+        seen_max = max(last_dates.values())
+        expected = most_recent_trading_day(datetime.utcnow())
+        target_date = max(seen_max, expected)
         stale = [sym for sym, d in last_dates.items() if d < target_date]
         if stale:
-            print(f"  Fecha más reciente vista: {target_date}")
-            print(f"  {len(stale)} tickers con cierre atrasado; reintentando individual...")
+            print(f"  Fecha esperada: {target_date}  (vista en el histórico: {seen_max})")
+            print(f"  {len(stale)} tickers atrasados; completando con cotización en vivo...")
             fixed = 0
             for sym in stale:
-                fresh = download_ticker(sym, start_str, end_str)
-                if fresh is not None and len(fresh) > 0 and fresh.index[-1].date() >= target_date:
-                    raw_data[sym] = fresh
-                    fixed += 1
-                time.sleep(0.8)
-            print(f"  Corregidos: {fixed}/{len(stale)}  |  Siguen atrasados: {len(stale) - fixed}")
+                live = fetch_live_close(sym)
+                if live is not None:
+                    df = raw_data.get(sym)
+                    if df is not None and len(df) > 0:
+                        new_row = pd.DataFrame(
+                            {"Open":  [live["close"]], "High": [live["high"]],
+                             "Low":   [live["low"]],   "Close": [live["close"]],
+                             "Volume": [live["volume"]]},
+                            index=[pd.Timestamp(target_date)],
+                        )
+                        raw_data[sym] = pd.concat([df, new_row])
+                        fixed += 1
+                time.sleep(0.5)
+            print(f"  Completados con cotización en vivo: {fixed}/{len(stale)}  |  Sin resolver: {len(stale) - fixed}")
 
     print("-" * 60)
 
