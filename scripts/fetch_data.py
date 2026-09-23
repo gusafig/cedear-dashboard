@@ -859,10 +859,36 @@ def fetch_all():
 
     failed = [sym for sym in TICKERS if raw_data.get(sym) is None]
     if failed:
-        print(f"  Reintentando {len(failed)} tickers individuales...")
+        print(f"  Reintentando {len(failed)} tickers sin dato (individual)...")
         for sym in failed:
             raw_data[sym] = download_ticker(sym, start_str, end_str)
             time.sleep(0.8)
+
+    # ── Verificación de atraso ──────────────────────────────────────────────
+    # El lote (download_batch) a veces devuelve un cierre más viejo que el
+    # real (aparentemente una respuesta en caché de Yahoo Finance). Se toma
+    # como referencia la fecha más nueva vista entre todos los tickers, y a
+    # los que quedaron atrás se los reintenta con descarga individual, que en
+    # la práctica trae el dato correcto con más frecuencia.
+    last_dates = {}
+    for sym, df in raw_data.items():
+        if df is not None and len(df) > 0:
+            last_dates[sym] = df.index[-1].date()
+
+    if last_dates:
+        target_date = max(last_dates.values())
+        stale = [sym for sym, d in last_dates.items() if d < target_date]
+        if stale:
+            print(f"  Fecha más reciente vista: {target_date}")
+            print(f"  {len(stale)} tickers con cierre atrasado; reintentando individual...")
+            fixed = 0
+            for sym in stale:
+                fresh = download_ticker(sym, start_str, end_str)
+                if fresh is not None and len(fresh) > 0 and fresh.index[-1].date() >= target_date:
+                    raw_data[sym] = fresh
+                    fixed += 1
+                time.sleep(0.8)
+            print(f"  Corregidos: {fixed}/{len(stale)}  |  Siguen atrasados: {len(stale) - fixed}")
 
     print("-" * 60)
 
