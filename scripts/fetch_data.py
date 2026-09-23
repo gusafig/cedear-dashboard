@@ -1073,8 +1073,49 @@ def fetch_all():
     print(f"OK: {ok}  |  Skip/Error: {skip}  |  Total: {len(TICKERS)}")
     return results
 
+def update_setup_history(data, history_path="data/setup_history.json"):
+    """
+    Mantiene un registro persistente de desde cuándo está activo el setup
+    'rebote + piso' para cada ticker.
+
+    - Si un ticker cumple hoy el setup y no lo cumplía en la corrida anterior
+      (no está en el historial), se guarda la fecha de HOY como inicio.
+    - Si ya estaba activo, se conserva la fecha original (no se pisa).
+    - Si dejó de cumplirse, se borra del historial (para que si vuelve a
+      activarse más adelante cuente como un nuevo evento, con fecha nueva).
+
+    Agrega a cada ticker de `data` el campo "setup_since" (fecha "YYYY-MM-DD"
+    o None si no está activo).
+    """
+    today_str = (datetime.utcnow() - timedelta(hours=3)).strftime("%Y-%m-%d")
+
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        if not isinstance(history, dict):
+            history = {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        history = {}
+
+    for sym, res in data.items():
+        if res.get("setup_rebote_piso"):
+            if sym not in history:
+                history[sym] = today_str
+            res["setup_since"] = history[sym]
+        else:
+            history.pop(sym, None)
+            res["setup_since"] = None
+
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(history, f, separators=(",", ":"), ensure_ascii=False)
+
+    return data
+
+
 def main():
     data = fetch_all()
+    data = update_setup_history(data)
 
     output = {
         "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
