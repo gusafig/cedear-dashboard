@@ -46,5 +46,25 @@ jobs:
 
           git commit -m "data: actualizar mercado $(date -u '+%Y-%m-%d %H:%M UTC') [skip ci]"
 
-          git pull --rebase origin main
-          git push origin HEAD:main
+          # market_data.json es un archivo generado por completo en cada corrida:
+          # si hay conflicto, siempre gana la versión recién calculada (-X ours),
+          # no tiene sentido mergear línea por línea un dato que ya quedó viejo.
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+
+            if git merge -X ours --no-edit origin/main; then
+              if git push origin HEAD:main; then
+                echo "Push OK"
+                exit 0
+              fi
+            else
+              echo "Merge falló, abortando intento $i"
+              git merge --abort || true
+            fi
+
+            echo "Reintentando en unos segundos... (intento $i)"
+            sleep $(( (RANDOM % 10) + 5 ))
+          done
+
+          echo "No se pudo pushear después de varios intentos"
+          exit 1
