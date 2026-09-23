@@ -2,7 +2,7 @@ name: Actualizar datos de mercado
 
 on:
   schedule:
-    - cron: "30 22 * * 1-5"   # 22:30 UTC = 19:30 Argentina (lunes a viernes)
+    - cron: "0 10 * * 2-6"   # 10:00 UTC = 07:00 Argentina (martes a sábado -> trae el cierre de lunes a viernes)
   workflow_dispatch:           # permite ejecutarlo manualmente
 
 concurrency:
